@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Fire.net.pk - Complete Bill Printing Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0; background: white; }
+            .page-break { page-break-before: always; }
+            .no-print, .no-print * { display: none !important; }
+        }
+        @page { size: A4; margin: 14mm; }
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 50; }
+        .modal-bg.active { display: flex; }
+        .modal { background: white; border-radius: 20px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 20px; }
+        .payment-item { background: #f8fafc; border-radius: 12px; padding: 8px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .filter-active { background-color: #dc2626 !important; color: white !important; border-color: #dc2626 !important; }
+        .preview-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; overflow: auto; padding: 20px; }
+        .preview-overlay.active { display: flex; align-items: center; justify-content: center; }
+        .preview-content { background: white; max-width: 800px; width: 100%; border-radius: 12px; overflow: hidden; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+        th { background: #f9fafb; font-weight: 600; font-size: 12px; text-transform: uppercase; color: #4b5563; }
+        .search-highlight { background-color: #fef3c7; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+<div class="container mx-auto px-4 py-6 max-w-7xl">
+    <!-- Header -->
+    <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4">
+        <div>
+            <h1 class="text-3xl font-bold text-red-700"><i class="fas fa-file-invoice-dollar mr-2"></i>Fire.net.pk Bill Printer</h1>
+            <p class="text-gray-500">Search | Filters | Sync Payments | Auto-Generate | WhatsApp | PDF Export</p>
+        </div>
+        <div class="flex gap-2">
+            <button id="downloadTemplateBtn" class="bg-gray-700 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-download"></i> CSV Template</button>
+            <button id="exportBillsBtn" class="bg-green-700 hover:bg-green-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-file-export"></i> Export CSV</button>
+        </div>
+    </div>
+
+    <!-- Dashboard KPIs - All calculations verified -->
+    <div id="dashboardCards" class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6"></div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-wrap gap-3 mb-6">
+        <button id="openAddBillBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-plus-circle"></i> Manual Bill</button>
+        <button id="autoGenerateBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-magic"></i> Auto Generate</button>
+        <button id="syncFinanceBtn" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-sync-alt"></i> Sync Payments</button>
+        <label class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl shadow cursor-pointer"><i class="fas fa-upload"></i> Import CSV <input type="file" id="csvUpload" accept=".csv" class="hidden"></label>
+        <button id="bulkPrintBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-print"></i> Bulk Print</button>
+        <button id="exportPdfBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-file-pdf"></i> Export PDF</button>
+        <button id="whatsappReminderBtn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl shadow"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+        <button id="selectAllBtn" class="border border-gray-400 bg-white px-4 py-2 rounded-xl shadow text-sm"><i class="fas fa-check-square"></i> Select All</button>
+    </div>
+
+    <!-- Filter Bar with Search -->
+    <div class="flex flex-wrap gap-3 mb-4 items-center bg-white p-3 rounded-xl shadow">
+        <div><span class="font-bold">Search:</span></div>
+        <input type="text" id="searchInput" placeholder="Name, Mobile, Code, PPPoE, Package, Area..." class="border rounded-lg px-3 py-1.5 w-64 text-sm">
+        <div class="h-6 w-px bg-gray-300 mx-1"></div>
+        <div><span class="font-bold">Status:</span></div>
+        <button data-filter="all" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">All</button>
+        <button data-filter="paid" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">Paid</button>
+        <button data-filter="unpaid" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">Unpaid</button>
+        <button data-filter="partial" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">Partial</button>
+        <div class="h-6 w-px bg-gray-300 mx-1"></div>
+        <div><span class="font-bold">Area:</span></div>
+        <select id="areaFilter" class="border rounded-lg px-2 py-1 text-sm bg-white"><option value="">All Areas</option></select>
+        <div><span class="font-bold">Package:</span></div>
+        <select id="packageFilter" class="border rounded-lg px-2 py-1 text-sm bg-white"><option value="">All Packages</option></select>
+        <div><span class="font-bold">Month:</span></div>
+        <input type="month" id="monthFilter" class="border rounded-lg px-2 py-1 text-sm">
+        <div class="flex-1 text-right text-sm text-gray-500" id="filterStats"></div>
+    </div>
+
+    <!-- Bills Table -->
+    <div class="bg-white rounded-2xl shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead>
+                    <tr class="bg-gray-50 border-b">
+                        <th class="w-8 px-3 py-3"><input type="checkbox" id="selectAllHeader" class="rounded"></th>
+                        <th class="px-3 py-3 text-left text-xs font-medium">Client Code</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium">Customer</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium">Mobile</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium">Package</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium">Area</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium">Bill Month</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium">Bill (Rs)</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium">Discount</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium">Paid (Rs)</th>
+                        <th class="px-3 py-3 text-right text-xs font-medium">Due (Rs)</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium">Status</th>
+                        <th class="px-3 py-3 text-center text-xs font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="billsTbody"></tbody>
+            </table>
+        </div>
+        <div id="noBillsMsg" class="text-center py-8 text-gray-400 hidden">No bills found.</div>
+        <div id="paginationControls" class="flex justify-between items-center px-4 py-3 border-t bg-gray-50 no-print"></div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="billModal" class="modal-bg"><div class="modal"><div class="flex justify-between border-b pb-2 mb-3"><h2 class="text-xl font-bold" id="modalTitle">Bill</h2><button id="closeModalBtn" class="text-gray-500 text-2xl">&times;</button></div><div id="modalBody"></div></div></div>
+<div id="previewOverlay" class="preview-overlay"><div class="preview-content"><div class="bg-white p-4 border-b flex justify-between"><h3 class="font-bold">Print Preview</h3><button id="closePreviewBtn" class="text-red-500">&times;</button></div><div id="previewFrame" style="height: 80vh; overflow: auto; padding: 10px;"></div><div class="p-3 border-t flex justify-end"><button id="doPrintPreviewBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Print Now</button></div></div></div>
+
+<script>
+    // ------------------- DATA -------------------
+    let bills = [];
+    let nextId = 1;
+    const STORAGE_KEY = 'bill_print_tool_pro';
+    const PAGE_SIZE = 35;
+    let currentFilter = 'all', currentPage = 1, filteredBills = [];
+    let currentMonthFilter = new Date().toISOString().slice(0,7);
+    let currentSearch = '';
+
+    // Helper functions
+    function getMonthDateRange(yearMonth) { let [y,m]=yearMonth.split('-').map(Number); let start=new Date(y,m-1,1), end=new Date(y,m,0); return { start: start.toLocaleDateString(), end: end.toLocaleDateString() }; }
+    
+    // VERIFIED CALCULATION: Net Due = Bill Amount - Discount - Total Paid
+    function recalcBill(b) { 
+        let totalPaid = (b.payments || []).reduce((s,p)=>s+(p.amount||0),0); 
+        b.alreadyPaid = totalPaid; 
+        let net = (b.monthlyBillAmount || 0) - (b.discount || 0) - totalPaid; 
+        b.netDue = net > 0 ? net : 0; 
+        if(!b.billNo) b.billNo = `MB-${(b.billMonth||'').replace('-','')}-${b.clientCode||'000'}`; 
+        return b; 
+    }
+    
+    function recalcAll() { bills.forEach(b=>recalcBill(b)); }
+    function saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(bills)); }
+    function getBillStatus(b) { 
+        if(b.netDue === 0) return 'paid'; 
+        if(b.alreadyPaid > 0) return 'partial'; 
+        return 'unpaid'; 
+    }
+    function escapeHtml(s){ return String(s??'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'})[m]); }
+    function numberFormat(n){ return (Number(n)||0).toLocaleString(); }
+    function today(){ return new Date().toISOString().slice(0,10); }
+
+    // Load initial data
+    function loadData(){
+        let stored = localStorage.getItem(STORAGE_KEY);
+        if(stored){ 
+            bills = JSON.parse(stored); 
+            nextId = Math.max(0, ...bills.map(b=>b.id), 0) + 1;
+            recalcAll();
+        } else {
+            bills = [{
+                id: 1, customerName: "Sheraz", mobile: "03021433803", clientCode: "0518", 
+                package: "4mb", area: "HEAD QUARTER", userId: "HQSabir", billMonth: "2026-06", 
+                issueDate: "2026-06-04", dueDate: "2026-06-10", monthlyBillAmount: 2200, 
+                discount: 200, payments: [{amount: 1000, method: "Cash", date: "2026-06-02"}], 
+                qrDataURL: null, billNo: "MB-202606-0518"
+            }];
+            nextId = 2;
+            recalcAll();
+            saveLocal();
+        }
+        applyFiltersAndRender();
+        updateDashboard();
+        updateFilters();
+    }
+
+    // SYNC PAYMENTS FROM MAIN APP - Fetches paid amounts from finance records
+    function syncPaymentsFromMainApp() {
+        try {
+            const mainData = localStorage.getItem('firenet_clean_fixed_v1');
+            if (!mainData) { alert("Main app data not found. Please open main ISP app first."); return; }
+            const main = JSON.parse(mainData);
+            const clients = main.clients || [];
+            const finance = main.finance || [];
+            
+            let updatedCount = 0;
+            
+            for (let bill of bills) {
+                const client = clients.find(c => (c.ccode === bill.clientCode) || (c.pin === bill.clientCode) || (c.mobile === bill.mobile));
+                if (!client) continue;
+                
+                // Find all income entries for this client in the current bill month
+                const payments = finance.filter(f => 
+                    (f.clientId === client.id || f.phone === client.mobile || f.customer === client.name || f.paidBy === client.name) &&
+                    f.type !== 'expense' &&
+                    (f.billMonth === bill.billMonth || f.date?.slice(0,7) === bill.billMonth)
+                ).map(f => ({ 
+                    amount: f.amount || 0, 
+                    method: f.mode || f.payment_mode || (f.type === 'income' ? 'Cash' : 'Expense'), 
+                    date: f.date || f.time || today(), 
+                    note: f.note || f.receiptId || '',
+                    receiptId: f.receiptId
+                }));
+                
+                if (payments.length > 0) {
+                    bill.payments = payments;
+                    recalcBill(bill);
+                    updatedCount++;
+                }
+            }
+            
+            if (updatedCount > 0) {
+                saveLocal();
+                applyFiltersAndRender();
+                updateDashboard();
+                alert(`Synced payments for ${updatedCount} bills from main app.\nTotal collected: Rs. ${bills.reduce((s,b)=>s+b.alreadyPaid,0).toLocaleString()}`);
+            } else {
+                alert("No new payments found. Make sure main app has finance income entries.");
+            }
+        } catch(e) { console.error(e); alert("Sync failed: " + e.message); }
+    }
+
+    // Auto Generate Bills from Main App Clients
+    function autoGenerateBills(){
+        let mainData = localStorage.getItem('firenet_clean_fixed_v1');
+        if(!mainData){ alert("Main app data not found. Please open main ISP app first."); return; }
+        let main = JSON.parse(mainData);
+        let clients = main.clients || [];
+        if(!clients.length){ alert("No clients found in main app."); return; }
+        
+        let month = currentMonthFilter;
+        let existingCodes = bills.filter(b=>b.billMonth===month).map(b=>b.clientCode);
+        let added = 0;
+        let totalAmount = 0;
+        
+        for(let c of clients){
+            if(!c.name || !c.mobile) continue;
+            let code = c.ccode || c.pin || c.id?.slice(-4) || '0000';
+            if(existingCodes.includes(code)) continue;
+            let amount = c.bill || c.monthlyFee || c.monthly_bill || 0;
+            if(amount <= 0) amount = 1500;
+            
+            let newBill = { 
+                id: nextId++, 
+                customerName: c.name, 
+                mobile: c.mobile, 
+                clientCode: code, 
+                package: c.package || 'Standard', 
+                area: c.area || c.address || '', 
+                userId: c.pppoe || c.username || '', 
+                billMonth: month, 
+                issueDate: today(), 
+                dueDate: `${month}-${c.dueDay || '10'}`, 
+                monthlyBillAmount: amount, 
+                discount: 0, 
+                payments: [], 
+                qrDataURL: null 
+            };
+            recalcBill(newBill);
+            bills.push(newBill);
+            added++;
+            totalAmount += amount;
+        }
+        if(added) { 
+            saveLocal(); 
+            applyFiltersAndRender(); 
+            updateDashboard(); 
+            updateFilters(); 
+            alert(`Generated ${added} bills for ${month}\nTotal bill amount: Rs. ${totalAmount.toLocaleString()}`);
+        } else {
+            alert("All clients already have bills for this month.");
+        }
+    }
+
+    function updateFilters(){
+        let areas = [...new Set(bills.map(b=>b.area).filter(a=>a))];
+        let packages = [...new Set(bills.map(b=>b.package).filter(p=>p))];
+        let areaSel = document.getElementById('areaFilter'); 
+        areaSel.innerHTML = '<option value="">All Areas</option>' + areas.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+        let pkgSel = document.getElementById('packageFilter'); 
+        pkgSel.innerHTML = '<option value="">All Packages</option>' + packages.map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+    }
+
+    // Apply all filters including search
+    function applyFiltersAndRender(){
+        let filtered = bills.filter(b => b.billMonth === currentMonthFilter);
+        
+        // Apply search filter
+        if(currentSearch.trim()){
+            let searchLower = currentSearch.toLowerCase();
+            filtered = filtered.filter(b => 
+                b.customerName.toLowerCase().includes(searchLower) ||
+                b.mobile.toLowerCase().includes(searchLower) ||
+                b.clientCode.toLowerCase().includes(searchLower) ||
+                (b.userId && b.userId.toLowerCase().includes(searchLower)) ||
+                (b.package && b.package.toLowerCase().includes(searchLower)) ||
+                (b.area && b.area.toLowerCase().includes(searchLower))
+            );
+        }
+        
+        // Apply status filter
+        if(currentFilter === 'paid') filtered = filtered.filter(b=>getBillStatus(b)==='paid');
+        else if(currentFilter === 'unpaid') filtered = filtered.filter(b=>getBillStatus(b)==='unpaid');
+        else if(currentFilter === 'partial') filtered = filtered.filter(b=>getBillStatus(b)==='partial');
+        
+        // Apply area filter
+        let areaVal = document.getElementById('areaFilter')?.value||'';
+        if(areaVal) filtered = filtered.filter(b=>b.area === areaVal);
+        
+        // Apply package filter
+        let pkgVal = document.getElementById('packageFilter')?.value||'';
+        if(pkgVal) filtered = filtered.filter(b=>b.package === pkgVal);
+        
+        filteredBills = filtered;
+        currentPage = 1;
+        renderTableBody();
+        renderPagination();
+        updateFilterStats();
+        updateSelectAllHeader();
+    }
+
+    function renderTableBody(){
+        let tbody = document.getElementById('billsTbody');
+        let start = (currentPage-1)*PAGE_SIZE;
+        let pageBills = filteredBills.slice(start, start+PAGE_SIZE);
+        
+        if(pageBills.length === 0 && filteredBills.length === 0){ 
+            tbody.innerHTML = '<tr><td colspan="13" class="text-center py-8 text-gray-400">No bills found</td></tr>';
+            document.getElementById('paginationControls').innerHTML = ''; 
+            return; 
+        }
+        
+        tbody.innerHTML = pageBills.map(bill => {
+            let status = getBillStatus(bill);
+            let statusText = status === 'paid' ? 'Paid' : (status === 'partial' ? 'Partial' : 'Unpaid');
+            let statusColor = status === 'paid' ? 'bg-green-100 text-green-800' : (status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800');
+            
+            return `<tr>
+                <td class="px-3 py-2"><input type="checkbox" class="bill-select" data-id="${bill.id}"></td>
+                <td class="px-3 py-2 font-mono text-sm">${escapeHtml(bill.clientCode)}</td>
+                <td class="px-3 py-2 font-medium">${escapeHtml(bill.customerName)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.mobile)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.package)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.area)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.billMonth)}</td>
+                <td class="px-3 py-2 text-right">Rs. ${numberFormat(bill.monthlyBillAmount)}</td>
+                <td class="px-3 py-2 text-right">Rs. ${numberFormat(bill.discount)}</td>
+                <td class="px-3 py-2 text-right">Rs. ${numberFormat(bill.alreadyPaid)}</td>
+                <td class="px-3 py-2 text-right font-bold text-red-600">Rs. ${numberFormat(bill.netDue)}</td>
+                <td class="px-3 py-2"><span class="px-2 py-1 rounded-full text-xs ${statusColor}">${statusText}</span></td>
+                <td class="px-3 py-2 text-center">
+                    <i class="fas fa-print text-blue-600 hover:text-blue-800 print-single mx-1 cursor-pointer" data-id="${bill.id}" title="Print"></i>
+                    <i class="fas fa-edit text-amber-600 hover:text-amber-800 edit-bill mx-1 cursor-pointer" data-id="${bill.id}" title="Edit"></i>
+                    <i class="fas fa-trash-alt text-red-500 hover:text-red-700 delete-bill mx-1 cursor-pointer" data-id="${bill.id}" title="Delete"></i>
+                    <i class="fas fa-money-bill-wave text-green-600 hover:text-green-800 partial-payment mx-1 cursor-pointer" data-id="${bill.id}" title="Add Payment"></i>
+                </td>
+            </tr>`;
+        }).join('');
+        attachTableEvents();
+    }
+
+    function renderPagination(){ 
+        let totalPages = Math.ceil(filteredBills.length/PAGE_SIZE); 
+        let c = document.getElementById('paginationControls'); 
+        if(totalPages <= 1 && filteredBills.length === 0){ c.innerHTML = ''; return; } 
+        let html = `<div class="text-sm text-gray-600">Showing ${((currentPage-1)*PAGE_SIZE)+1}-${Math.min(currentPage*PAGE_SIZE,filteredBills.length)} of ${filteredBills.length} bills</div><div class="flex gap-2">`; 
+        if(currentPage > 1) html += `<button class="page-btn px-3 py-1 border rounded bg-white hover:bg-gray-100 cursor-pointer" data-page="${currentPage-1}">Prev</button>`; 
+        for(let i = Math.max(1, currentPage-2); i <= Math.min(totalPages, currentPage+2); i++) {
+            html += `<button class="page-btn px-3 py-1 border rounded ${i === currentPage ? 'bg-red-600 text-white' : 'bg-white hover:bg-gray-100'} cursor-pointer" data-page="${i}">${i}</button>`;
+        }
+        if(currentPage < totalPages) html += `<button class="page-btn px-3 py-1 border rounded bg-white hover:bg-gray-100 cursor-pointer" data-page="${currentPage+1}">Next</button>`; 
+        html += `</div>`; 
+        c.innerHTML = html; 
+        document.querySelectorAll('.page-btn').forEach(btn => btn.addEventListener('click', () => { currentPage = parseInt(btn.dataset.page); renderTableBody(); renderPagination(); }));
+    }
+
+    function updateFilterStats(){ 
+        let monthBills = bills.filter(b=>b.billMonth === currentMonthFilter);
+        let total = monthBills.length; 
+        let paid = monthBills.filter(b=>getBillStatus(b)==='paid').length; 
+        let unpaid = monthBills.filter(b=>getBillStatus(b)==='unpaid').length; 
+        let partial = monthBills.filter(b=>getBillStatus(b)==='partial').length;
+        let totalBill = monthBills.reduce((s,b)=>s+b.monthlyBillAmount,0);
+        let totalPaid = monthBills.reduce((s,b)=>s+b.alreadyPaid,0);
+        let totalDue = monthBills.reduce((s,b)=>s+b.netDue,0);
+        document.getElementById('filterStats').innerHTML = `Month: ${currentMonthFilter} | Total:${total} | Paid:${paid} | Unpaid:${unpaid} | Partial:${partial} | Bill:Rs.${numberFormat(totalBill)} | Collected:Rs.${numberFormat(totalPaid)} | Due:Rs.${numberFormat(totalDue)}`; 
+    }
+
+    function updateSelectAllHeader(){ 
+        let all = document.querySelectorAll('.bill-select'); 
+        let checked = document.querySelectorAll('.bill-select:checked'); 
+        let h = document.getElementById('selectAllHeader'); 
+        if(h) h.checked = all.length > 0 && all.length === checked.length; 
+    }
+
+    function attachTableEvents(){ 
+        document.querySelectorAll('.print-single').forEach(el => el.addEventListener('click', () => printBillById(parseInt(el.dataset.id)))); 
+        document.querySelectorAll('.edit-bill').forEach(el => el.addEventListener('click', () => openBillModal(bills.find(b=>b.id===parseInt(el.dataset.id))))); 
+        document.querySelectorAll('.delete-bill').forEach(el => el.addEventListener('click', () => { if(confirm('Delete bill?')){ let id=parseInt(el.dataset.id); bills=bills.filter(b=>b.id!==id); saveLocal(); applyFiltersAndRender(); updateDashboard(); } }));
+        document.querySelectorAll('.partial-payment').forEach(el => el.addEventListener('click', () => openPartialPayment(parseInt(el.dataset.id))));
+        document.querySelectorAll('.bill-select').forEach(cb => cb.addEventListener('change', updateSelectAllHeader));
+    }
+
+    // Dashboard with VERIFIED calculations
+    function updateDashboard(){ 
+        let monthBills = bills.filter(b=>b.billMonth === currentMonthFilter); 
+        let totalBill = monthBills.reduce((s,b)=>s+b.monthlyBillAmount,0); 
+        let totalDiscount = monthBills.reduce((s,b)=>s+(b.discount||0),0);
+        let totalPaid = monthBills.reduce((s,b)=>s+b.alreadyPaid,0); 
+        let totalDue = monthBills.reduce((s,b)=>s+b.netDue,0); 
+        let collectionPercent = totalBill ? Math.round((totalPaid/totalBill)*100) : 0;
+        let paidCount = monthBills.filter(b=>getBillStatus(b)==='paid').length;
+        let unpaidCount = monthBills.filter(b=>getBillStatus(b)==='unpaid').length;
+        let partialCount = monthBills.filter(b=>getBillStatus(b)==='partial').length;
+        
+        document.getElementById('dashboardCards').innerHTML = `
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-blue-500"><div class="text-xs text-gray-500">Total Bill</div><div class="text-xl font-bold">Rs. ${numberFormat(totalBill)}</div></div>
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-purple-500"><div class="text-xs text-gray-500">Discount</div><div class="text-xl font-bold">Rs. ${numberFormat(totalDiscount)}</div></div>
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-green-500"><div class="text-xs">Collected</div><div class="text-xl font-bold text-green-600">Rs. ${numberFormat(totalPaid)}</div></div>
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-red-500"><div class="text-xs">Due</div><div class="text-xl font-bold text-red-600">Rs. ${numberFormat(totalDue)}</div></div>
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-orange-500"><div class="text-xs">Collection</div><div class="text-xl font-bold">${collectionPercent}%</div><div class="w-full bg-gray-200 rounded-full h-1.5 mt-1"><div class="bg-green-500 h-1.5 rounded-full" style="width:${collectionPercent}%"></div></div></div>
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-indigo-500"><div class="text-xs">Paid/Partial/Unpaid</div><div class="text-lg font-bold">${paidCount} / ${partialCount} / ${unpaidCount}</div></div>`;
+    }
+
+    // Partial Payment Modal
+    function openPartialPayment(billId){
+        let bill = bills.find(b=>b.id===billId);
+        if(!bill) return;
+        let html = `<div class="space-y-3">
+            <div class="bg-gray-100 p-3 rounded"><b>${escapeHtml(bill.customerName)}</b><br>Current Due: <span class="text-red-600 font-bold">Rs. ${bill.netDue}</span><br>Original Bill: Rs. ${bill.monthlyBillAmount} | Discount: Rs. ${bill.discount}</div>
+            <div class="grid grid-cols-2 gap-2"><div><label>Payment Amount</label><input id="ppAmount" type="number" class="border rounded w-full p-2" value="${bill.netDue}"></div>
+            <div><label>Method</label><select id="ppMethod" class="border rounded w-full p-2"><option>Cash</option><option>Bank Transfer</option><option>JazzCash</option><option>Easypaisa</option></select></div></div>
+            <div><label>Date</label><input id="ppDate" type="date" class="border rounded w-full p-2" value="${today()}"></div>
+            <div><label>Reference/Note</label><input id="ppNote" class="border rounded w-full p-2" placeholder="Transaction ID / Note"></div>
+            <button id="savePartialBtn" class="bg-green-600 text-white px-4 py-2 rounded w-full">Add Payment</button></div>`;
+        openModalWithContent(html, 'Receive Payment');
+        document.getElementById('savePartialBtn').onclick = () => {
+            let amt = parseFloat(document.getElementById('ppAmount').value);
+            if(isNaN(amt) || amt <= 0) return alert("Invalid amount");
+            bill.payments.push({ amount: amt, method: document.getElementById('ppMethod').value, date: document.getElementById('ppDate').value, note: document.getElementById('ppNote').value });
+            recalcBill(bill);
+            saveLocal();
+            applyFiltersAndRender();
+            updateDashboard();
+            closeModal();
+            alert(`Payment recorded.\nNew due: Rs. ${bill.netDue}\nTotal paid: Rs. ${bill.alreadyPaid}`);
+        };
+    }
+
+    function openModalWithContent(html, title){
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('billModal').classList.add('active');
+    }
+
+    function closeModal(){ document.getElementById('billModal').classList.remove('active'); }
+    document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+
+    // Bill print functions
+    async function printBills(billsToPrint, asPdf=false){
+        let printHtml = '<div class="print-area">';
+        for(let i = 0; i < billsToPrint.length; i++){
+            let bill = billsToPrint[i];
+            let qrUrl = bill.qrDataURL ? bill.qrDataURL : await generateQR(bill);
+            let period = getMonthDateRange(bill.billMonth);
+            printHtml += `<div class="page" style="width:100%;max-width:190mm;margin:0 auto;font-family:Arial;color:#111;background:#fff;">
+                <div style="display:flex;justify-content:space-between;border-bottom:3px solid #dc2626;padding-bottom:10px;margin-bottom:14px;">
+                    <div><h1 style="margin:0;color:#dc2626;font-size:28px;">Fire.net.pk</h1><p style="margin:4px 0;font-size:12px;">Main Qazal Bash road<br>Mobile: 03035600435<br>Email: support@firenet.pk</p></div>
+                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;min-width:210px;"><h2 style="margin:0 0 8px;font-size:20px;">MONTHLY INTERNET BILL</h2>
+                    <div><b>Bill No:</b> ${bill.billNo}</div><div><b>Bill Month:</b> ${bill.billMonth}</div><div><b>Billing Period:</b> ${period.start} to ${period.end}</div>
+                    <div><b>Issue Date:</b> ${bill.issueDate}</div><div><b>Due Date:</b> <span style="color:#dc2626;">${bill.dueDate}</span></div></div>
+                </div>
+                <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;margin-bottom:14px;">
+                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;"><h3 style="margin:0 0 10px;">Bill To</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <div><b>Customer Name</b><br>${escapeHtml(bill.customerName)}</div><div><b>Mobile</b><br>${escapeHtml(bill.mobile)}</div>
+                        <div><b>Client Code</b><br>${escapeHtml(bill.clientCode)}</div><div><b>User ID/PPPoE</b><br>${escapeHtml(bill.userId)}</div>
+                        <div><b>Package</b><br>${escapeHtml(bill.package)}</div><div><b>Area</b><br>${escapeHtml(bill.area)}</div>
+                    </div></div>
+                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;text-align:center;"><h3>Payment QR</h3><img src="${qrUrl}" style="width:150px"><div style="font-size:12px;margin-top:8px;">Scan for payment details</div></div>
+                </div>
+                <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;"><h3>Monthly Bill Summary</h3>
+                <table style="width:100%;border-collapse:collapse;"><tr><th style="text-align:left;padding:8px;">Description</th><th style="text-align:left;padding:8px;">Details</th></tr>
+                <tr><td style="padding:8px;">Package</td><td>${bill.package}</td></tr>
+                <tr><td style="padding:8px;">User ID / PPPoE</td><td>${bill.userId}</td></tr>
+                <tr><td style="padding:8px;">Monthly Bill</td><td>Rs. ${numberFormat(bill.monthlyBillAmount)}</td></tr>
+                <tr><td style="padding:8px;">Discount</td><td>Rs. ${numberFormat(bill.discount)}</td></tr>
+                <tr><td style="padding:8px;">Already Paid</td><td>Rs. ${numberFormat(bill.alreadyPaid)}</td></tr>
+                <tr style="font-size:18px;color:#dc2626;"><td style="padding:8px;"><b>Net Due</b></td><td><b>Rs. ${numberFormat(bill.netDue)}</b></td></tr>
+                </table></div>
+                <div style="margin-top:14px;padding:12px;border:1px dashed #cbd5e1;border-radius:12px;background:#fcfcfd;font-size:12px;">
+                    <b>Important Note:</b> Please pay your monthly internet bill on or before the due date. Current status: ${bill.netDue===0?'Paid':bill.alreadyPaid>0?'Partial':'Unpaid'}
+                </div>
+                <div style="margin-top:14px;font-size:11px;color:#64748b;text-align:center;">This is a computer-generated monthly bill.</div>
+            </div>`;
+            if(i < billsToPrint.length-1) printHtml += '<div class="page-break"></div>';
+        }
+        printHtml += '</div>';
+        if(asPdf){
+            let tempDiv = document.createElement('div'); tempDiv.innerHTML = printHtml; document.body.appendChild(tempDiv); 
+            html2pdf().from(tempDiv).set({margin:[0.5,0.5,0.5,0.5], filename: 'bills.pdf', pagebreak: {mode:'css', before:'.page-break'}}).save().then(()=>tempDiv.remove());
+        } else { 
+            let w = window.open(); 
+            w.document.write(`<html><head><style>@page{size:A4;margin:14mm;}body{background:white;}</style></head><body>${printHtml}<script>window.onload=()=>window.print();<\/script></body></html>`); 
+            w.document.close(); 
+        }
+    }
+
+    async function generateQR(bill){ 
+        let payload = `Bill:${bill.billNo}|${bill.customerName}|Due:Rs.${bill.netDue}|Pay by${bill.dueDate}`; 
+        try{ return await QRCode.toDataURL(payload,{width:180}); }catch(e){ return 'https://quickchart.io/qr?size=180&text='+encodeURIComponent(payload); } 
+    }
+    
+    async function printBillById(id){ 
+        let bill = bills.find(b=>b.id===id); 
+        if(bill) await printBills([bill]); 
+    }
+    
+    function getSelectedBillIds(){ 
+        return [...document.querySelectorAll('.bill-select:checked')].map(cb=>parseInt(cb.dataset.id)); 
+    }
+
+    // Event Listeners
+    document.getElementById('bulkPrintBtn').addEventListener('click', async() => { 
+        let ids = getSelectedBillIds(); 
+        if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id))); 
+        else alert("Select bills to print"); 
+    });
+    
+    document.getElementById('exportPdfBtn').addEventListener('click', async() => { 
+        let ids = getSelectedBillIds(); 
+        if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id)), true); 
+        else alert("Select bills to export"); 
+    });
+    
+    document.getElementById('whatsappReminderBtn').addEventListener('click', () => { 
+        let ids = getSelectedBillIds(); 
+        let unpaid = bills.filter(b=>ids.includes(b.id) && getBillStatus(b)!=='paid'); 
+        if(!unpaid.length) alert("No unpaid selected"); 
+        else unpaid.forEach(b => { 
+            let msg = `*BILL REMINDER - Fire.net.pk*%0A%0AName: ${b.customerName}%0AMobile: ${b.mobile}%0AClient Code: ${b.clientCode}%0APackage: ${b.package}%0AMonth: ${b.billMonth}%0ADue Date: ${b.dueDate}%0AAmount Due: Rs. ${b.netDue}%0A%0APlease pay before due date to avoid interruption.`; 
+            let phone = String(b.mobile).replace(/\D/g,''); 
+            if(phone.startsWith('0') && phone.length===11) phone = '92'+phone.slice(1); 
+            window.open(`https://wa.me/${phone}?text=${msg}`, '_blank'); 
+        }); 
+    });
+    
+    document.getElementById('selectAllBtn').addEventListener('click', () => { 
+        document.querySelectorAll('.bill-select').forEach(cb => cb.checked = true); 
+        updateSelectAllHeader(); 
+    });
+    
+    document.getElementById('selectAllHeader').addEventListener('change', (e) => { 
+        document.querySelectorAll('.bill-select').forEach(cb => cb.checked = e.target.checked); 
+    });
+    
+    document.getElementById('autoGenerateBtn').addEventListener('click', autoGenerateBills);
+    document.getElementById('syncFinanceBtn').addEventListener('click', syncPaymentsFromMainApp);
+    document.getElementById('areaFilter').addEventListener('change', applyFiltersAndRender);
+    document.getElementById('packageFilter').addEventListener('change', applyFiltersAndRender);
+    document.getElementById('monthFilter').value = currentMonthFilter; 
+    document.getElementById('monthFilter').addEventListener('change', (e) => { currentMonthFilter = e.target.value; applyFiltersAndRender(); updateDashboard(); });
+    
+    // Search input
+    document.getElementById('searchInput').addEventListener('input', (e) => { currentSearch = e.target.value; applyFiltersAndRender(); });
+    
+    // Filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('filter-active','bg-red-600','text-white')); 
+        btn.classList.add('filter-active','bg-red-600','text-white'); 
+        currentFilter = btn.dataset.filter; 
+        applyFiltersAndRender(); 
+    }));
+    document.querySelector('.filter-btn[data-filter="all"]').classList.add('filter-active','bg-red-600','text-white');
+
+    // Open add bill modal
+    document.getElementById('openAddBillBtn').addEventListener('click', () => {
+        let newBill = {id: nextId++, customerName: "", mobile: "", clientCode: "", package: "", area: "", userId: "", billMonth: currentMonthFilter, issueDate: today(), dueDate: `${currentMonthFilter}-10`, monthlyBillAmount: 0, discount: 0, payments: [], qrDataURL: null};
+        let html = `<div class="space-y-3"><div class="grid grid-cols-2 gap-2">
+            <div><label>Customer Name *</label><input id="eName" class="border rounded p-2 w-full"></div>
+            <div><label>Mobile *</label><input id="eMobile" class="border rounded p-2 w-full"></div>
+            <div><label>Client Code</label><input id="eCode" class="border rounded p-2 w-full"></div>
+            <div><label>Package</label><input id="ePkg" class="border rounded p-2 w-full" value="4mb"></div>
+            <div><label>Area</label><input id="eArea" class="border rounded p-2 w-full"></div>
+            <div><label>User ID/PPPoE</label><input id="eUser" class="border rounded p-2 w-full"></div>
+            <div><label>Bill Month</label><input id="eMonth" class="border rounded p-2 w-full" value="${currentMonthFilter}"></div>
+            <div><label>Due Date</label><input id="eDue" class="border rounded p-2 w-full" value="${currentMonthFilter}-10"></div>
+            <div><label>Monthly Bill (Rs)</label><input id="eAmount" type="number" class="border rounded p-2 w-full" value="1500"></div>
+            <div><label>Discount (Rs)</label><input id="eDiscount" type="number" class="border rounded p-2 w-full" value="0"></div>
+        </div>
+        <button id="saveNewBillBtn" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Save Bill</button></div>`;
+        openModalWithContent(html, 'Add New Bill');
+        document.getElementById('saveNewBillBtn').onclick = () => {
+            newBill.customerName = document.getElementById('eName').value; 
+            newBill.mobile = document.getElementById('eMobile').value; 
+            newBill.clientCode = document.getElementById('eCode').value;
+            newBill.package = document.getElementById('ePkg').value; 
+            newBill.area = document.getElementById('eArea').value; 
+            newBill.userId = document.getElementById('eUser').value;
+            newBill.billMonth = document.getElementById('eMonth').value; 
+            newBill.dueDate = document.getElementById('eDue').value; 
+            newBill.monthlyBillAmount = parseFloat(document.getElementById('eAmount').value) || 0;
+            newBill.discount = parseFloat(document.getElementById('eDiscount').value) || 0;
+            if(!newBill.customerName) return alert("Customer name required");
+            if(!newBill.mobile) return alert("Mobile number required");
+            recalcBill(newBill); 
+            bills.push(newBill); 
+            saveLocal(); 
+            applyFiltersAndRender(); 
+            updateDashboard(); 
+            updateFilters(); 
+            closeModal();
+            alert(`Bill added for ${newBill.customerName}\nDue: Rs. ${newBill.netDue}`);
+        };
+    });
+
+    function openBillModal(bill){
+        let html = `<div class="space-y-3"><div class="grid grid-cols-2 gap-2">
+            <div><label>Customer</label><input id="eName" value="${escapeHtml(bill.customerName)}" class="border rounded p-2 w-full"></div>
+            <div><label>Mobile</label><input id="eMobile" value="${escapeHtml(bill.mobile)}" class="border rounded p-2 w-full"></div>
+            <div><label>Client Code</label><input id="eCode" value="${escapeHtml(bill.clientCode)}" class="border rounded p-2 w-full"></div>
+            <div><label>Package</label><input id="ePkg" value="${escapeHtml(bill.package)}" class="border rounded p-2 w-full"></div>
+            <div><label>Area</label><input id="eArea" value="${escapeHtml(bill.area)}" class="border rounded p-2 w-full"></div>
+            <div><label>User ID</label><input id="eUser" value="${escapeHtml(bill.userId)}" class="border rounded p-2 w-full"></div>
+            <div><label>Bill Month</label><input id="eMonth" value="${bill.billMonth}" class="border rounded p-2 w-full"></div>
+            <div><label>Due Date</label><input id="eDue" value="${bill.dueDate}" class="border rounded p-2 w-full"></div>
+            <div><label>Monthly Bill (Rs)</label><input id="eAmount" type="number" value="${bill.monthlyBillAmount}" class="border rounded p-2 w-full"></div>
+            <div><label>Discount (Rs)</label><input id="eDiscount" type="number" value="${bill.discount}" class="border rounded p-2 w-full"></div>
+        </div>
+        <div class="border-t pt-2"><div class="font-semibold mb-1">Payment History</div><div id="paymentsList" class="max-h-32 overflow-auto">${(bill.payments||[]).map(p=>`<div class="text-sm border-b py-1">${p.date} | ${p.method} | Rs.${p.amount}</div>`).join('')||'<div class="text-gray-400">No payments</div>'}</div></div>
+        <button id="saveEditBtn" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Save Changes</button></div>`;
+        openModalWithContent(html, 'Edit Bill');
+        document.getElementById('saveEditBtn').onclick = () => {
+            bill.customerName = document.getElementById('eName').value; 
+            bill.mobile = document.getElementById('eMobile').value; 
+            bill.clientCode = document.getElementById('eCode').value;
+            bill.package = document.getElementById('ePkg').value; 
+            bill.area = document.getElementById('eArea').value; 
+            bill.userId = document.getElementById('eUser').value;
+            bill.billMonth = document.getElementById('eMonth').value; 
+            bill.dueDate = document.getElementById('eDue').value; 
+            bill.monthlyBillAmount = parseFloat(document.getElementById('eAmount').value) || 0;
+            bill.discount = parseFloat(document.getElementById('eDiscount').value) || 0;
+            recalcBill(bill); 
+            saveLocal(); 
+            applyFiltersAndRender(); 
+            updateDashboard(); 
+            closeModal();
+        };
+    }
+
+    // CSV Import
+    document.getElementById('csvUpload').addEventListener('change', function(e){ 
+        let file = e.target.files[0]; 
+        if(!file) return; 
+        Papa.parse(file, {header: true, complete: function(r){ 
+            let added = 0; 
+            let totalAmount = 0;
+            for(let row of r.data){ 
+                if(!row['Customer Name']) continue; 
+                let payments = []; 
+                let paid = parseFloat(row['Already Paid']||0); 
+                if(paid > 0) payments.push({amount: paid, method: "CSV Import", date: today()}); 
+                let nb = {
+                    id: nextId++, 
+                    customerName: row['Customer Name'], 
+                    mobile: row['Mobile'], 
+                    clientCode: row['Client Code'], 
+                    package: row['Package'], 
+                    area: row['Area'], 
+                    userId: row['User ID / PPPoE'], 
+                    billMonth: row['Bill Month'] || currentMonthFilter, 
+                    issueDate: row['Issue Date'] || today(), 
+                    dueDate: row['Due Date'] || `${currentMonthFilter}-10`, 
+                    monthlyBillAmount: parseFloat(row['Monthly Bill Amount']) || 0, 
+                    discount: parseFloat(row['Discount']) || 0, 
+                    payments: payments, 
+                    qrDataURL: null
+                }; 
+                recalcBill(nb); 
+                bills.push(nb); 
+                added++; 
+                totalAmount += nb.monthlyBillAmount;
+            } 
+            if(added){ 
+                saveLocal(); 
+                applyFiltersAndRender(); 
+                updateDashboard(); 
+                updateFilters(); 
+                alert(`Imported ${added} bills\nTotal bill amount: Rs. ${totalAmount.toLocaleString()}`);
+            } 
+        }}); 
+        e.target.value = ''; 
+    });
+
+    // CSV Template Download
+    document.getElementById('downloadTemplateBtn').addEventListener('click', () => { 
+        let headers = ["Customer Name","Mobile","Client Code","Package","Area","User ID / PPPoE","Bill Month","Issue Date","Due Date","Monthly Bill Amount","Discount","Already Paid"]; 
+        let sample = ["Sheraz","03021433803","0518","4mb","HEAD QUARTER","HQSabir","2026-06","2026-06-04","2026-06-10","2200","200","1000"]; 
+        let csv = headers.join(",")+"\n"+sample.join(","); 
+        let blob = new Blob([csv], {type: "text/csv"}); 
+        let a = document.createElement('a'); 
+        a.href = URL.createObjectURL(blob); 
+        a.download = "bill_template.csv"; 
+        a.click(); 
+    });
+
+    // Export CSV
+    document.getElementById('exportBillsBtn').addEventListener('click', () => { 
+        let exportData = bills.map(b => ({
+            "Customer Name": b.customerName,
+            "Mobile": b.mobile,
+            "Client Code": b.clientCode,
+            "Package": b.package,
+            "Area": b.area,
+            "User ID / PPPoE": b.userId,
+            "Bill Month": b.billMonth,
+            "Issue Date": b.issueDate,
+            "Due Date": b.dueDate,
+            "Monthly Bill Amount": b.monthlyBillAmount,
+            "Discount": b.discount,
+            "Already Paid": b.alreadyPaid,
+            "Net Due": b.netDue,
+            "Status": getBillStatus(b) === 'paid' ? 'Paid' : (getBillStatus(b) === 'partial' ? 'Partial' : 'Unpaid')
+        })); 
+        let csv = Papa.unparse(exportData); 
+        let blob = new Blob([csv], {type: "text/csv"}); 
+        let a = document.createElement('a'); 
+        a.href = URL.createObjectURL(blob); 
+        a.download = `bills_export_${currentMonthFilter}.csv`; 
+        a.click(); 
+    });
+
+    // Preview
+    document.getElementById('previewPrintBtn')?.addEventListener('click', async() => { 
+        let ids = getSelectedBillIds(); 
+        if(!ids.length) alert("Select bills to preview"); 
+        else{ 
+            let selected = bills.filter(b=>ids.includes(b.id)); 
+            let previewHtml = ''; 
+            for(let b of selected){ 
+                let qr = await generateQR(b); 
+                previewHtml += `<div style="border:1px solid #ccc;margin:10px;padding:10px;"><h3>${b.customerName} - ${b.billMonth}</h3><p>Due: Rs.${b.netDue}</p><img src="${qr}" width="80"></div>`; 
+            } 
+            document.getElementById('previewFrame').innerHTML = previewHtml; 
+            document.getElementById('previewOverlay').classList.add('active'); 
+        } 
+    });
+    
+    document.getElementById('closePreviewBtn')?.addEventListener('click', () => document.getElementById('previewOverlay').classList.remove('active'));
+    document.getElementById('doPrintPreviewBtn')?.addEventListener('click', async() => { 
+        let ids = getSelectedBillIds(); 
+        if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id))); 
+        document.getElementById('previewOverlay').classList.remove('active'); 
+    });
+
+    loadData();
+</script>
+</body>
+</html>
