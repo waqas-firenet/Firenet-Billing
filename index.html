@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Fire.net.pk - Complete Bill Suite with Timestamps & Invoices</title>
+    <title>Fire.net.pk - Complete Bill Suite with WhatsApp PDF</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -31,8 +31,6 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .btn-wa { background-color: #25D366; color: white; }
         .btn-wa:hover { background-color: #128C7E; }
-        .payment-timestamp { font-size: 11px; color: #6b7280; }
-        .invoice-item { background: #fef3c7; border-left: 3px solid #f59e0b; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -42,7 +40,7 @@
     <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4">
         <div>
             <h1 class="text-3xl font-bold text-red-700"><i class="fas fa-file-invoice-dollar mr-2"></i>Fire.net.pk Bill Printer</h1>
-            <p class="text-gray-500">Firebase Sync | Invoices Auto-Add | Payment Timestamps | WhatsApp PDF</p>
+            <p class="text-gray-500">Firebase Sync | Print Bills | WhatsApp PDF | Bulk Actions</p>
         </div>
         <div class="flex gap-2">
             <button id="downloadTemplateBtn" class="bg-gray-700 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-download"></i> CSV Template</button>
@@ -64,7 +62,7 @@
         <label class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl shadow cursor-pointer"><i class="fas fa-upload"></i> Import CSV <input type="file" id="csvUpload" accept=".csv" class="hidden"></label>
         <button id="bulkPrintBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-print"></i> Bulk Print</button>
         <button id="exportPdfBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-file-pdf"></i> Export PDF</button>
-        <button id="whatsappSelectedBtn" class="btn-wa hover:bg-green-700 text-white px-4 py-2 rounded-xl shadow"><i class="fab fa-whatsapp"></i> Send to Selected</button>
+        <button id="whatsappSelectedBtn" class="btn-wa hover:bg-green-700 text-white px-4 py-2 rounded-xl shadow"><i class="fab fa-whatsapp"></i> Send PDF to Selected</button>
         <button id="selectAllBtn" class="border border-gray-400 bg-white px-4 py-2 rounded-xl shadow text-sm"><i class="fas fa-check-square"></i> Select All</button>
     </div>
 
@@ -145,13 +143,8 @@
     let currentSearch = '';
     let clientsData = [];
     let financeData = [];
-    let invoicesData = [];
     
     // Helper functions
-    function getCurrentTimestamp() {
-        return new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi' });
-    }
-    
     function getMonthDateRange(yearMonth) { let [y,m]=yearMonth.split('-').map(Number); let start=new Date(y,m-1,1), end=new Date(y,m,0); return { start: start.toLocaleDateString(), end: end.toLocaleDateString() }; }
     
     function recalcBill(b) { 
@@ -187,6 +180,7 @@
     function numberFormat(n){ return (Number(n)||0).toLocaleString(); }
     function today(){ return new Date().toISOString().slice(0,10); }
     
+    // Format mobile number for WhatsApp
     function formatWhatsAppNumber(mobile) {
         let phone = String(mobile || '').replace(/\D/g, '');
         if (phone.startsWith('0') && phone.length === 11) return '92' + phone.slice(1);
@@ -195,12 +189,10 @@
         return phone;
     }
     
+    // Generate WhatsApp message text
     function generateWhatsAppMessage(bill) {
         let status = bill.netDue === 0 ? '✅ PAID' : (bill.alreadyPaid > 0 ? '🟡 PARTIAL' : '🔴 UNPAID');
         let period = getMonthDateRange(bill.billMonth);
-        let lastPayment = bill.payments && bill.payments.length > 0 ? bill.payments[bill.payments.length - 1] : null;
-        let lastPaymentText = lastPayment ? `\nLast Payment: Rs. ${lastPayment.amount} on ${lastPayment.timestamp || lastPayment.date}` : '';
-        
         return `*FIRE.NET.PK - MONTHLY BILL*
 ━━━━━━━━━━━━━━━━━━━━
 *Bill No:* ${bill.billNo}
@@ -220,12 +212,13 @@ Area: ${bill.area}
 Monthly Bill: Rs. ${numberFormat(bill.monthlyBillAmount)}
 Discount: Rs. ${numberFormat(bill.discount)}
 Already Paid: Rs. ${numberFormat(bill.alreadyPaid)}
-*Net Due: Rs. ${numberFormat(bill.netDue)}*${lastPaymentText}
+*Net Due: Rs. ${numberFormat(bill.netDue)}*
 
 📊 *Status:* ${status}
 
 ━━━━━━━━━━━━━━━━━━━━
 Please pay before due date to avoid service interruption.
+For online payment or support, contact our support team.
 
 *Fire.net.pk ISP Services*`;
     }
@@ -256,7 +249,7 @@ Please pay before due date to avoid service interruption.
         alertDiv.innerHTML = message;
     }
     
-    // ------------------- SYNC FROM FIREBASE WITH INVOICES -------------------
+    // ------------------- SYNC FROM FIREBASE -------------------
     async function syncFromFirebase() {
         if(!isFirebaseConnected && !initFirebase()) {
             alert("Firebase not connected. Please check your internet connection.");
@@ -270,43 +263,22 @@ Please pay before due date to avoid service interruption.
             clientsData = clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
             updateSyncAlert('loading', '<div class="spinner"></div> Fetching finance records...');
+            
             const financeSnapshot = await db.collection('finance').get();
             financeData = financeSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            updateSyncAlert('loading', '<div class="spinner"></div> Fetching invoices...');
-            const invoicesSnapshot = await db.collection('invoices').get();
-            invoicesData = invoicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            updateSyncAlert('loading', '<div class="spinner"></div> Processing data with invoices...');
+            updateSyncAlert('loading', '<div class="spinner"></div> Processing data...');
             
             let month = currentMonthFilter;
             let existingCodes = bills.filter(b=>b.billMonth===month).map(b=>b.clientCode);
             let added = 0;
             let updated = 0;
-            let invoiceAdded = 0;
             
             for(let client of clientsData) {
                 if(!client.name || !client.mobile) continue;
                 let code = client.ccode || client.pin || client.id?.slice(-4) || '0000';
+                let amount = client.bill || client.monthlyFee || client.monthly_bill || 1500;
                 
-                // Get monthly bill amount from client
-                let monthlyAmount = client.bill || client.monthlyFee || client.monthly_bill || 1500;
-                
-                // Get additional invoices for this client in the current month
-                let clientInvoices = invoicesData.filter(inv => 
-                    (inv.clientId === client.id || inv.phone === client.mobile || inv.cust === client.name) &&
-                    inv.billMonth === month &&
-                    inv.work !== 'Monthly Bill' &&
-                    inv.work !== 'Monthly Fee'
-                );
-                
-                // Calculate total from invoices
-                let invoiceTotal = clientInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-                
-                // Total bill amount = monthly fee + invoice amounts
-                let totalBillAmount = monthlyAmount + invoiceTotal;
-                
-                // Get payments from finance
                 let payments = financeData.filter(f => 
                     (f.clientId === client.id || f.phone === client.mobile || f.customer === client.name || f.paidBy === client.name) &&
                     f.type !== 'expense' &&
@@ -314,28 +286,16 @@ Please pay before due date to avoid service interruption.
                 ).map(f => ({ 
                     amount: f.amount || 0, 
                     method: f.mode || f.payment_mode || 'Cash', 
-                    date: f.date || f.time || today(),
-                    timestamp: f.time || getCurrentTimestamp(),
+                    date: f.date || f.time || today(), 
                     note: f.note || f.receiptId || ''
-                }));
-                
-                // Store invoice details for display
-                let invoiceDetails = clientInvoices.map(inv => ({
-                    id: inv.id,
-                    work: inv.work || 'Service',
-                    amount: inv.total || 0,
-                    date: inv.date || inv.time || today()
                 }));
                 
                 if(existingCodes.includes(code)) {
                     let existingBill = bills.find(b => b.clientCode === code && b.billMonth === month);
-                    if(existingBill) {
-                        existingBill.monthlyBillAmount = totalBillAmount;
-                        existingBill.invoiceDetails = invoiceDetails;
+                    if(existingBill && payments.length > 0) {
                         existingBill.payments = payments;
                         recalcBill(existingBill);
                         updated++;
-                        if(invoiceDetails.length > 0) invoiceAdded += invoiceDetails.length;
                     }
                 } else {
                     let newBill = { 
@@ -349,17 +309,14 @@ Please pay before due date to avoid service interruption.
                         billMonth: month, 
                         issueDate: today(), 
                         dueDate: client.dueDate || client.exDate || `${month}-10`, 
-                        monthlyBillAmount: totalBillAmount,
-                        baseMonthlyAmount: monthlyAmount,
+                        monthlyBillAmount: amount, 
                         discount: 0, 
                         payments: payments, 
-                        invoiceDetails: invoiceDetails,
                         qrDataURL: null 
                     };
                     recalcBill(newBill);
                     bills.push(newBill);
                     added++;
-                    if(invoiceDetails.length > 0) invoiceAdded += invoiceDetails.length;
                 }
             }
             
@@ -368,12 +325,12 @@ Please pay before due date to avoid service interruption.
                 applyFiltersAndRender();
                 updateDashboard();
                 updateFilters();
-                updateSyncAlert('success', `✅ Sync complete! Added ${added} bills, updated ${updated} bills. Invoices added: ${invoiceAdded}`);
+                updateSyncAlert('success', `✅ Firebase sync complete! Added ${added} new bills, updated ${updated} bills.`);
             } else {
-                updateSyncAlert('success', `✅ Sync complete. No changes for ${month}.`);
+                updateSyncAlert('success', `✅ Firebase sync complete. No new bills for ${month}.`);
             }
             
-            alert(`Firebase Sync Complete!\n\nClients: ${clientsData.length}\nFinance: ${financeData.length}\nInvoices: ${invoicesData.length}\nNew bills: ${added}\nUpdated: ${updated}\nInvoices added to bills: ${invoiceAdded}`);
+            alert(`Firebase Sync Complete!\n\nClients: ${clientsData.length}\nFinance records: ${financeData.length}\nNew bills: ${added}\nUpdated: ${updated}`);
             
         } catch(e) {
             console.error('Firebase sync error:', e);
@@ -412,11 +369,9 @@ Please pay before due date to avoid service interruption.
                 billMonth: month, 
                 issueDate: today(), 
                 dueDate: c.dueDate || c.exDate || `${month}-10`, 
-                monthlyBillAmount: amount,
-                baseMonthlyAmount: amount,
+                monthlyBillAmount: amount, 
                 discount: 0, 
                 payments: [], 
-                invoiceDetails: [],
                 qrDataURL: null 
             };
             recalcBill(newBill);
@@ -493,11 +448,10 @@ Please pay before due date to avoid service interruption.
             let status = getBillStatus(bill);
             let statusText = status === 'paid' ? 'Paid' : (status === 'partial' ? 'Partial' : 'Unpaid');
             let statusColor = status === 'paid' ? 'bg-green-100 text-green-800' : (status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800');
-            let hasInvoices = bill.invoiceDetails && bill.invoiceDetails.length > 0;
             
             return `<tr>
                 <td class="px-3 py-2"><input type="checkbox" class="bill-select" data-id="${bill.id}"></td>
-                <td class="px-3 py-2 font-mono text-sm">${escapeHtml(bill.clientCode)}${hasInvoices ? '<br><span class="text-xs text-amber-600"><i class="fas fa-receipt"></i> +inv</span>' : ''}</td>
+                <td class="px-3 py-2 font-mono text-sm">${escapeHtml(bill.clientCode)}</td>
                 <td class="px-3 py-2 font-medium">${escapeHtml(bill.customerName)}</td>
                 <td class="px-3 py-2">${escapeHtml(bill.mobile)}</td>
                 <td class="px-3 py-2">${escapeHtml(bill.package)}</td>
@@ -514,7 +468,6 @@ Please pay before due date to avoid service interruption.
                     <i class="fas fa-edit text-amber-600 hover:text-amber-800 edit-bill mx-1 cursor-pointer" data-id="${bill.id}" title="Edit"></i>
                     <i class="fas fa-trash-alt text-red-500 hover:text-red-700 delete-bill mx-1 cursor-pointer" data-id="${bill.id}" title="Delete"></i>
                     <i class="fas fa-money-bill-wave text-green-600 hover:text-green-800 partial-payment mx-1 cursor-pointer" data-id="${bill.id}" title="Add Payment"></i>
-                    ${hasInvoices ? '<i class="fas fa-receipt text-amber-500 view-invoices mx-1 cursor-pointer" data-id="${bill.id}" title="View Invoices"></i>' : ''}
                 </td>
             </tr>`;
         }).join('');
@@ -545,8 +498,7 @@ Please pay before due date to avoid service interruption.
         let totalBill = monthBills.reduce((s,b)=>s+b.monthlyBillAmount,0);
         let totalPaid = monthBills.reduce((s,b)=>s+b.alreadyPaid,0);
         let totalDue = monthBills.reduce((s,b)=>s+b.netDue,0);
-        let totalInvoices = monthBills.reduce((s,b)=>s+(b.invoiceDetails?.length || 0),0);
-        document.getElementById('filterStats').innerHTML = `Month: ${currentMonthFilter} | Total:${total} | Paid:${paid} | Unpaid:${unpaid} | Partial:${partial} | Inv:${totalInvoices} | Due:Rs.${numberFormat(totalDue)}`; 
+        document.getElementById('filterStats').innerHTML = `Month: ${currentMonthFilter} | Total:${total} | Paid:${paid} | Unpaid:${unpaid} | Partial:${partial} | Bill:Rs.${numberFormat(totalBill)} | Collected:Rs.${numberFormat(totalPaid)} | Due:Rs.${numberFormat(totalDue)}`; 
     }
     
     function updateSelectAllHeader(){ 
@@ -562,44 +514,59 @@ Please pay before due date to avoid service interruption.
         document.querySelectorAll('.edit-bill').forEach(el => el.addEventListener('click', () => openBillModal(bills.find(b=>b.id===parseInt(el.dataset.id))))); 
         document.querySelectorAll('.delete-bill').forEach(el => el.addEventListener('click', () => { if(confirm('Delete bill?')){ let id=parseInt(el.dataset.id); bills=bills.filter(b=>b.id!==id); saveLocal(); applyFiltersAndRender(); updateDashboard(); } }));
         document.querySelectorAll('.partial-payment').forEach(el => el.addEventListener('click', () => openPartialPayment(parseInt(el.dataset.id))));
-        document.querySelectorAll('.view-invoices').forEach(el => el.addEventListener('click', () => viewInvoices(parseInt(el.dataset.id))));
         document.querySelectorAll('.bill-select').forEach(cb => cb.addEventListener('change', updateSelectAllHeader));
     }
     
-    function viewInvoices(billId) {
-        let bill = bills.find(b => b.id === billId);
-        if(!bill || !bill.invoiceDetails || bill.invoiceDetails.length === 0) {
-            alert("No additional invoices for this client.");
-            return;
-        }
-        let invoiceHtml = bill.invoiceDetails.map(inv => 
-            `<div class="border-b py-2"><b>${escapeHtml(inv.work)}</b><br>Amount: Rs. ${numberFormat(inv.amount)}<br>Date: ${escapeHtml(inv.date)}</div>`
-        ).join('');
-        openModalWithContent(`<h3 class="font-bold mb-3">Additional Invoices for ${escapeHtml(bill.customerName)}</h3>${invoiceHtml}`, 'Invoices');
-    }
-    
+    // Send WhatsApp for single bill
     async function sendSingleWhatsApp(billId) {
         let bill = bills.find(b => b.id === billId);
         if (!bill) return;
+        
         let phone = formatWhatsAppNumber(bill.mobile);
-        if (!phone) { alert("No valid mobile number found."); return; }
+        if (!phone) {
+            alert("No valid mobile number found for this client.");
+            return;
+        }
+        
         let message = generateWhatsAppMessage(bill);
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+        let url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
     }
     
+    // Send PDF via WhatsApp for selected bills
     async function sendSelectedWhatsAppPDF() {
         let ids = getSelectedBillIds();
-        if (ids.length === 0) { alert("Please select at least one bill."); return; }
+        if (ids.length === 0) {
+            alert("Please select at least one bill to send.");
+            return;
+        }
+        
         let selectedBills = bills.filter(b => ids.includes(b.id));
         let unpaidBills = selectedBills.filter(b => getBillStatus(b) !== 'paid');
-        if (unpaidBills.length === 0) { alert("Selected bills are already paid."); return; }
-        if (!confirm(`Send WhatsApp to ${unpaidBills.length} client(s)? Total Due: Rs. ${unpaidBills.reduce((s,b)=>s+b.netDue,0).toLocaleString()}`)) return;
+        
+        if (unpaidBills.length === 0) {
+            alert("Selected bills are already paid. No reminder needed.");
+            return;
+        }
+        
+        let confirmMsg = `Send WhatsApp messages to ${unpaidBills.length} client(s)?\n\n`;
+        confirmMsg += `Total Due Amount: Rs. ${unpaidBills.reduce((s,b)=>s+b.netDue,0).toLocaleString()}`;
+        
+        if (!confirm(confirmMsg)) return;
+        
         for (let i = 0; i < unpaidBills.length; i++) {
+            let bill = unpaidBills[i];
             setTimeout(() => {
-                let phone = formatWhatsAppNumber(unpaidBills[i].mobile);
-                if (phone) window.open(`https://wa.me/${phone}?text=${encodeURIComponent(generateWhatsAppMessage(unpaidBills[i]))}`, '_blank');
+                let phone = formatWhatsAppNumber(bill.mobile);
+                if (phone) {
+                    let message = generateWhatsAppMessage(bill);
+                    let url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+                    window.open(url, '_blank');
+                }
             }, i * 800);
         }
+        
+        alert(`Opening WhatsApp for ${unpaidBills.length} client(s). Please send each message.`);
     }
     
     // Dashboard
@@ -613,18 +580,17 @@ Please pay before due date to avoid service interruption.
         let paidCount = monthBills.filter(b=>getBillStatus(b)==='paid').length;
         let unpaidCount = monthBills.filter(b=>getBillStatus(b)==='unpaid').length;
         let partialCount = monthBills.filter(b=>getBillStatus(b)==='partial').length;
-        let totalInvoices = monthBills.reduce((s,b)=>s+(b.invoiceDetails?.length || 0),0);
         
         document.getElementById('dashboardCards').innerHTML = `
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-blue-500"><div class="text-xs text-gray-500">Total Bill</div><div class="text-xl font-bold">Rs. ${numberFormat(totalBill)}</div></div>
-            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-purple-500"><div class="text-xs">Discount</div><div class="text-xl font-bold">Rs. ${numberFormat(totalDiscount)}</div></div>
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-purple-500"><div class="text-xs text-gray-500">Discount</div><div class="text-xl font-bold">Rs. ${numberFormat(totalDiscount)}</div></div>
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-green-500"><div class="text-xs">Collected</div><div class="text-xl font-bold text-green-600">Rs. ${numberFormat(totalPaid)}</div></div>
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-red-500"><div class="text-xs">Due</div><div class="text-xl font-bold text-red-600">Rs. ${numberFormat(totalDue)}</div></div>
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-orange-500"><div class="text-xs">Collection</div><div class="text-xl font-bold">${collectionPercent}%</div><div class="w-full bg-gray-200 rounded-full h-1.5 mt-1"><div class="bg-green-500 h-1.5 rounded-full" style="width:${collectionPercent}%"></div></div></div>
-            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-indigo-500"><div class="text-xs">Paid/Partial/Unpaid</div><div class="text-lg font-bold">${paidCount} / ${partialCount} / ${unpaidCount}<br><span class="text-xs">Invoices: ${totalInvoices}</span></div></div>`;
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-indigo-500"><div class="text-xs">Paid/Partial/Unpaid</div><div class="text-lg font-bold">${paidCount} / ${partialCount} / ${unpaidCount}</div></div>`;
     }
     
-    // Partial Payment Modal with timestamp
+    // Partial Payment Modal
     function openPartialPayment(billId){
         let bill = bills.find(b=>b.id===billId);
         if(!bill) return;
@@ -634,26 +600,18 @@ Please pay before due date to avoid service interruption.
             <div><label>Method</label><select id="ppMethod" class="border rounded w-full p-2"><option>Cash</option><option>Bank Transfer</option><option>JazzCash</option><option>Easypaisa</option></select></div></div>
             <div><label>Date</label><input id="ppDate" type="date" class="border rounded w-full p-2" value="${today()}"></div>
             <div><label>Reference/Note</label><input id="ppNote" class="border rounded w-full p-2" placeholder="Transaction ID / Note"></div>
-            <button id="savePartialBtn" class="bg-green-600 text-white px-4 py-2 rounded w-full">Add Payment with Timestamp</button></div>`;
+            <button id="savePartialBtn" class="bg-green-600 text-white px-4 py-2 rounded w-full">Add Payment</button></div>`;
         openModalWithContent(html, 'Receive Payment');
         document.getElementById('savePartialBtn').onclick = () => {
             let amt = parseFloat(document.getElementById('ppAmount').value);
             if(isNaN(amt) || amt <= 0) return alert("Invalid amount");
-            let paymentWithTimestamp = { 
-                amount: amt, 
-                method: document.getElementById('ppMethod').value, 
-                date: document.getElementById('ppDate').value, 
-                timestamp: getCurrentTimestamp(),
-                note: document.getElementById('ppNote').value,
-                receiptId: 'RCPT-' + Date.now()
-            };
-            bill.payments.push(paymentWithTimestamp);
+            bill.payments.push({ amount: amt, method: document.getElementById('ppMethod').value, date: document.getElementById('ppDate').value, note: document.getElementById('ppNote').value });
             recalcBill(bill);
             saveLocal();
             applyFiltersAndRender();
             updateDashboard();
             closeModal();
-            alert(`Payment recorded!\nAmount: Rs. ${amt}\nTime: ${paymentWithTimestamp.timestamp}\nNew due: Rs. ${bill.netDue}`);
+            alert(`Payment recorded.\nNew due: Rs. ${bill.netDue}\nTotal paid: Rs. ${bill.alreadyPaid}`);
         };
     }
     
@@ -673,48 +631,35 @@ Please pay before due date to avoid service interruption.
             let bill = billsToPrint[i];
             let qrUrl = bill.qrDataURL ? bill.qrDataURL : await generateQR(bill);
             let period = getMonthDateRange(bill.billMonth);
-            let invoiceRows = '';
-            if(bill.invoiceDetails && bill.invoiceDetails.length > 0){
-                invoiceRows = `<tr style="background:#fef3c7;"><td colspan="2" style="padding:8px;"><b>📋 Additional Invoices</b></td></tr>
-                ${bill.invoiceDetails.map(inv => `<tr style="background:#fffbeb;"><td style="padding:6px 8px;">${escapeHtml(inv.work)}</td><td style="padding:6px 8px;text-align:right;">Rs. ${numberFormat(inv.amount)}</td></tr>`).join('')}`;
-            }
-            let paymentRows = '';
-            if(bill.payments && bill.payments.length > 0){
-                paymentRows = `<tr><td colspan="2" style="padding:8px;"><b>💰 Payment History</b></td></tr>
-                ${bill.payments.map(p => `<tr><td style="padding:4px 8px;font-size:11px;">${p.timestamp || p.date} | ${p.method}</td><td style="padding:4px 8px;text-align:right;font-size:11px;">Rs. ${numberFormat(p.amount)}</td></tr>`).join('')}`;
-            }
-            
             printHtml += `<div class="page" style="width:100%;max-width:190mm;margin:0 auto;font-family:Arial;color:#111;background:#fff;">
                 <div style="display:flex;justify-content:space-between;border-bottom:3px solid #dc2626;padding-bottom:10px;margin-bottom:14px;">
                     <div><h1 style="margin:0;color:#dc2626;font-size:28px;">Fire.net.pk</h1><p style="margin:4px 0;font-size:12px;">Main Qazal Bash road<br>Mobile: 03035600435<br>Email: support@firenet.pk</p></div>
-                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;min-width:210px;"><h2 style="margin:0 0 8px;font-size:20px;">MONTHLY BILL</h2>
-                    <div><b>Bill No:</b> ${bill.billNo}</div><div><b>Month:</b> ${bill.billMonth}</div><div><b>Period:</b> ${period.start} to ${period.end}</div>
-                    <div><b>Issue:</b> ${bill.issueDate}</div><div><b>Due:</b> <span style="color:#dc2626;">${bill.dueDate}</span></div></div>
+                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;min-width:210px;"><h2 style="margin:0 0 8px;font-size:20px;">MONTHLY INTERNET BILL</h2>
+                    <div><b>Bill No:</b> ${bill.billNo}</div><div><b>Bill Month:</b> ${bill.billMonth}</div><div><b>Billing Period:</b> ${period.start} to ${period.end}</div>
+                    <div><b>Issue Date:</b> ${bill.issueDate}</div><div><b>Due Date:</b> <span style="color:#dc2626;">${bill.dueDate}</span></div></div>
                 </div>
                 <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;margin-bottom:14px;">
                     <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;"><h3 style="margin:0 0 10px;">Bill To</h3>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                        <div><b>Customer</b><br>${escapeHtml(bill.customerName)}</div><div><b>Mobile</b><br>${escapeHtml(bill.mobile)}</div>
-                        <div><b>Client Code</b><br>${escapeHtml(bill.clientCode)}</div><div><b>User ID</b><br>${escapeHtml(bill.userId)}</div>
+                        <div><b>Customer Name</b><br>${escapeHtml(bill.customerName)}</div><div><b>Mobile</b><br>${escapeHtml(bill.mobile)}</div>
+                        <div><b>Client Code</b><br>${escapeHtml(bill.clientCode)}</div><div><b>User ID/PPPoE</b><br>${escapeHtml(bill.userId)}</div>
                         <div><b>Package</b><br>${escapeHtml(bill.package)}</div><div><b>Area</b><br>${escapeHtml(bill.area)}</div>
                     </div></div>
-                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;text-align:center;"><h3>Payment QR</h3><img src="${qrUrl}" style="width:150px"><div style="font-size:12px;margin-top:8px;">Scan to pay</div></div>
+                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;text-align:center;"><h3>Payment QR</h3><img src="${qrUrl}" style="width:150px"><div style="font-size:12px;margin-top:8px;">Scan for payment details</div></div>
                 </div>
-                <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;"><h3>Bill Summary</h3>
-                <table style="width:100%;border-collapse:collapse;">
-                    <tr><td style="padding:8px;">Monthly Package</td><td style="padding:8px;text-align:right;">Rs. ${numberFormat(bill.baseMonthlyAmount || bill.monthlyBillAmount)}</td></tr>
-                    ${invoiceRows}
-                    <tr style="border-top:1px solid #e5e7eb;"><td style="padding:8px;"><b>Total Bill</b></td><td style="padding:8px;text-align:right;"><b>Rs. ${numberFormat(bill.monthlyBillAmount)}</b></td></tr>
-                    <tr><td style="padding:8px;">Discount</td><td style="padding:8px;text-align:right;">Rs. ${numberFormat(bill.discount)}</td></tr>
-                    <tr><td style="padding:8px;">Already Paid</td><td style="padding:8px;text-align:right;">Rs. ${numberFormat(bill.alreadyPaid)}</td></tr>
-                    ${paymentRows}
-                    <tr style="font-size:18px;color:#dc2626;"><td style="padding:8px;"><b>Net Due</b></td><td style="padding:8px;text-align:right;"><b>Rs. ${numberFormat(bill.netDue)}</b></td></tr>
+                <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;"><h3>Monthly Bill Summary</h3>
+                <table style="width:100%;border-collapse:collapse;"><tr><th style="text-align:left;padding:8px;">Description</th><th style="text-align:left;padding:8px;">Details</th></tr>
+                <tr><td style="padding:8px;">Package</td><td>${bill.package}</td></tr>
+                <tr><td style="padding:8px;">User ID / PPPoE</td><td>${bill.userId}</td></tr>
+                <tr><td style="padding:8px;">Monthly Bill</td><td>Rs. ${numberFormat(bill.monthlyBillAmount)}</td></tr>
+                <tr><td style="padding:8px;">Discount</td><td>Rs. ${numberFormat(bill.discount)}</td></tr>
+                <tr><td style="padding:8px;">Already Paid</td><td>Rs. ${numberFormat(bill.alreadyPaid)}</td></tr>
+                <tr style="font-size:18px;color:#dc2626;"><td style="padding:8px;"><b>Net Due</b></td><td><b>Rs. ${numberFormat(bill.netDue)}</b></td></tr>
                 </table></div>
                 <div style="margin-top:14px;padding:12px;border:1px dashed #cbd5e1;border-radius:12px;background:#fcfcfd;font-size:12px;">
-                    <b>Important Note:</b> Please pay before due date. Status: ${bill.netDue===0?'Paid':bill.alreadyPaid>0?'Partial':'Unpaid'}
-                    ${bill.payments && bill.payments.length > 0 ? `<br>Last payment: ${bill.payments[bill.payments.length-1].timestamp || bill.payments[bill.payments.length-1].date}` : ''}
+                    <b>Important Note:</b> Please pay your monthly internet bill on or before the due date. Current status: ${bill.netDue===0?'Paid':bill.alreadyPaid>0?'Partial':'Unpaid'}
                 </div>
-                <div style="margin-top:14px;font-size:11px;color:#64748b;text-align:center;">Computer generated bill</div>
+                <div style="margin-top:14px;font-size:11px;color:#64748b;text-align:center;">This is a computer-generated monthly bill.</div>
             </div>`;
             if(i < billsToPrint.length-1) printHtml += '<div class="page-break"></div>';
         }
@@ -734,17 +679,36 @@ Please pay before due date to avoid service interruption.
         try{ return await QRCode.toDataURL(payload,{width:180}); }catch(e){ return 'https://quickchart.io/qr?size=180&text='+encodeURIComponent(payload); } 
     }
     
-    async function printBillById(id){ let bill = bills.find(b=>b.id===id); if(bill) await printBills([bill]); }
-    function getSelectedBillIds(){ return [...document.querySelectorAll('.bill-select:checked')].map(cb=>parseInt(cb.dataset.id)); }
+    async function printBillById(id){ 
+        let bill = bills.find(b=>b.id===id); 
+        if(bill) await printBills([bill]); 
+    }
+    
+    function getSelectedBillIds(){ 
+        return [...document.querySelectorAll('.bill-select:checked')].map(cb=>parseInt(cb.dataset.id)); 
+    }
     
     // Event Listeners
     document.getElementById('syncFirebaseBtn').addEventListener('click', syncFromFirebase);
     document.getElementById('autoGenerateBtn').addEventListener('click', autoGenerateBills);
-    document.getElementById('bulkPrintBtn').addEventListener('click', async() => { let ids = getSelectedBillIds(); if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id))); else alert("Select bills to print"); });
-    document.getElementById('exportPdfBtn').addEventListener('click', async() => { let ids = getSelectedBillIds(); if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id)), true); else alert("Select bills to export"); });
+    document.getElementById('bulkPrintBtn').addEventListener('click', async() => { 
+        let ids = getSelectedBillIds(); 
+        if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id))); 
+        else alert("Select bills to print"); 
+    });
+    document.getElementById('exportPdfBtn').addEventListener('click', async() => { 
+        let ids = getSelectedBillIds(); 
+        if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id)), true); 
+        else alert("Select bills to export"); 
+    });
     document.getElementById('whatsappSelectedBtn').addEventListener('click', sendSelectedWhatsAppPDF);
-    document.getElementById('selectAllBtn').addEventListener('click', () => { document.querySelectorAll('.bill-select').forEach(cb => cb.checked = true); updateSelectAllHeader(); });
-    document.getElementById('selectAllHeader').addEventListener('change', (e) => { document.querySelectorAll('.bill-select').forEach(cb => cb.checked = e.target.checked); });
+    document.getElementById('selectAllBtn').addEventListener('click', () => { 
+        document.querySelectorAll('.bill-select').forEach(cb => cb.checked = true); 
+        updateSelectAllHeader(); 
+    });
+    document.getElementById('selectAllHeader').addEventListener('change', (e) => { 
+        document.querySelectorAll('.bill-select').forEach(cb => cb.checked = e.target.checked); 
+    });
     document.getElementById('areaFilter').addEventListener('change', applyFiltersAndRender);
     document.getElementById('packageFilter').addEventListener('change', applyFiltersAndRender);
     document.getElementById('monthFilter').value = currentMonthFilter; 
@@ -761,14 +725,14 @@ Please pay before due date to avoid service interruption.
     
     // Open add bill modal
     document.getElementById('openAddBillBtn').addEventListener('click', () => {
-        let newBill = {id: nextId++, customerName: "", mobile: "", clientCode: "", package: "", area: "", userId: "", billMonth: currentMonthFilter, issueDate: today(), dueDate: `${currentMonthFilter}-10`, monthlyBillAmount: 0, baseMonthlyAmount: 0, discount: 0, payments: [], invoiceDetails: [], qrDataURL: null};
+        let newBill = {id: nextId++, customerName: "", mobile: "", clientCode: "", package: "", area: "", userId: "", billMonth: currentMonthFilter, issueDate: today(), dueDate: `${currentMonthFilter}-10`, monthlyBillAmount: 0, discount: 0, payments: [], qrDataURL: null};
         let html = `<div class="space-y-3"><div class="grid grid-cols-2 gap-2">
             <div><label>Customer Name *</label><input id="eName" class="border rounded p-2 w-full"></div>
             <div><label>Mobile *</label><input id="eMobile" class="border rounded p-2 w-full"></div>
             <div><label>Client Code</label><input id="eCode" class="border rounded p-2 w-full"></div>
             <div><label>Package</label><input id="ePkg" class="border rounded p-2 w-full" value="4mb"></div>
             <div><label>Area</label><input id="eArea" class="border rounded p-2 w-full"></div>
-            <div><label>User ID</label><input id="eUser" class="border rounded p-2 w-full"></div>
+            <div><label>User ID/PPPoE</label><input id="eUser" class="border rounded p-2 w-full"></div>
             <div><label>Bill Month</label><input id="eMonth" class="border rounded p-2 w-full" value="${currentMonthFilter}"></div>
             <div><label>Due Date</label><input id="eDue" class="border rounded p-2 w-full" value="${currentMonthFilter}-10"></div>
             <div><label>Monthly Bill (Rs)</label><input id="eAmount" type="number" class="border rounded p-2 w-full" value="1500"></div>
@@ -786,7 +750,6 @@ Please pay before due date to avoid service interruption.
             newBill.billMonth = document.getElementById('eMonth').value; 
             newBill.dueDate = document.getElementById('eDue').value; 
             newBill.monthlyBillAmount = parseFloat(document.getElementById('eAmount').value) || 0;
-            newBill.baseMonthlyAmount = newBill.monthlyBillAmount;
             newBill.discount = parseFloat(document.getElementById('eDiscount').value) || 0;
             if(!newBill.customerName) return alert("Customer name required");
             if(!newBill.mobile) return alert("Mobile number required");
@@ -814,9 +777,8 @@ Please pay before due date to avoid service interruption.
             <div><label>Monthly Bill (Rs)</label><input id="eAmount" type="number" value="${bill.monthlyBillAmount}" class="border rounded p-2 w-full"></div>
             <div><label>Discount (Rs)</label><input id="eDiscount" type="number" value="${bill.discount}" class="border rounded p-2 w-full"></div>
         </div>
-        <div class="border-t pt-2"><div class="font-semibold mb-1">Payment History</div><div id="paymentsList" class="max-h-32 overflow-auto">${(bill.payments||[]).map(p=>`<div class="text-sm border-b py-1">${p.timestamp || p.date} | ${p.method} | Rs.${p.amount}</div>`).join('')||'<div class="text-gray-400">No payments</div>'}</div></div>
-        <div class="border-t pt-2 mt-2"><div class="font-semibold mb-1">Additional Invoices</div><div id="invoicesList" class="max-h-32 overflow-auto">${(bill.invoiceDetails||[]).map(inv=>`<div class="text-sm border-b py-1">${inv.date} | ${inv.work} | Rs.${inv.amount}</div>`).join('')||'<div class="text-gray-400">No additional invoices</div>'}</div></div>
-        <button id="saveEditBtn" class="bg-blue-600 text-white px-4 py-2 rounded w-full mt-2">Save Changes</button></div>`;
+        <div class="border-t pt-2"><div class="font-semibold mb-1">Payment History</div><div id="paymentsList" class="max-h-32 overflow-auto">${(bill.payments||[]).map(p=>`<div class="text-sm border-b py-1">${p.date} | ${p.method} | Rs.${p.amount}</div>`).join('')||'<div class="text-gray-400">No payments</div>'}</div></div>
+        <button id="saveEditBtn" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Save Changes</button></div>`;
         openModalWithContent(html, 'Edit Bill');
         document.getElementById('saveEditBtn').onclick = () => {
             bill.customerName = document.getElementById('eName').value; 
@@ -843,11 +805,12 @@ Please pay before due date to avoid service interruption.
         if(!file) return; 
         Papa.parse(file, {header: true, complete: function(r){ 
             let added = 0; 
+            let totalAmount = 0;
             for(let row of r.data){ 
                 if(!row['Customer Name']) continue; 
                 let payments = []; 
                 let paid = parseFloat(row['Already Paid']||0); 
-                if(paid > 0) payments.push({amount: paid, method: "CSV Import", date: today(), timestamp: getCurrentTimestamp()}); 
+                if(paid > 0) payments.push({amount: paid, method: "CSV Import", date: today()}); 
                 let nb = {
                     id: nextId++, 
                     customerName: row['Customer Name'], 
@@ -859,18 +822,23 @@ Please pay before due date to avoid service interruption.
                     billMonth: row['Bill Month'] || currentMonthFilter, 
                     issueDate: row['Issue Date'] || today(), 
                     dueDate: row['Due Date'] || `${currentMonthFilter}-10`, 
-                    monthlyBillAmount: parseFloat(row['Monthly Bill Amount']) || 0,
-                    baseMonthlyAmount: parseFloat(row['Monthly Bill Amount']) || 0,
+                    monthlyBillAmount: parseFloat(row['Monthly Bill Amount']) || 0, 
                     discount: parseFloat(row['Discount']) || 0, 
                     payments: payments, 
-                    invoiceDetails: [],
                     qrDataURL: null
                 }; 
                 recalcBill(nb); 
                 bills.push(nb); 
                 added++; 
+                totalAmount += nb.monthlyBillAmount;
             } 
-            if(added){ saveLocal(); applyFiltersAndRender(); updateDashboard(); updateFilters(); alert(`Imported ${added} bills`); } 
+            if(added){ 
+                saveLocal(); 
+                applyFiltersAndRender(); 
+                updateDashboard(); 
+                updateFilters(); 
+                alert(`Imported ${added} bills\nTotal: Rs. ${totalAmount.toLocaleString()}`);
+            } 
         }}); 
         e.target.value = ''; 
     });
@@ -888,13 +856,20 @@ Please pay before due date to avoid service interruption.
     
     document.getElementById('exportBillsBtn').addEventListener('click', () => { 
         let exportData = bills.map(b => ({
-            "Customer Name": b.customerName, "Mobile": b.mobile, "Client Code": b.clientCode,
-            "Package": b.package, "Area": b.area, "User ID / PPPoE": b.userId,
-            "Bill Month": b.billMonth, "Issue Date": b.issueDate, "Due Date": b.dueDate,
-            "Monthly Bill Amount": b.monthlyBillAmount, "Discount": b.discount,
-            "Already Paid": b.alreadyPaid, "Net Due": b.netDue,
-            "Status": getBillStatus(b) === 'paid' ? 'Paid' : (getBillStatus(b) === 'partial' ? 'Partial' : 'Unpaid'),
-            "Invoice Count": b.invoiceDetails?.length || 0
+            "Customer Name": b.customerName,
+            "Mobile": b.mobile,
+            "Client Code": b.clientCode,
+            "Package": b.package,
+            "Area": b.area,
+            "User ID / PPPoE": b.userId,
+            "Bill Month": b.billMonth,
+            "Issue Date": b.issueDate,
+            "Due Date": b.dueDate,
+            "Monthly Bill Amount": b.monthlyBillAmount,
+            "Discount": b.discount,
+            "Already Paid": b.alreadyPaid,
+            "Net Due": b.netDue,
+            "Status": getBillStatus(b) === 'paid' ? 'Paid' : (getBillStatus(b) === 'partial' ? 'Partial' : 'Unpaid')
         })); 
         let csv = Papa.unparse(exportData); 
         let blob = new Blob([csv], {type: "text/csv"}); 
@@ -904,6 +879,7 @@ Please pay before due date to avoid service interruption.
         a.click(); 
     });
     
+    // Initialize
     loadLocal();
     applyFiltersAndRender();
     updateDashboard();
