@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+             <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -23,13 +23,8 @@
         .modal { background: white; border-radius: 20px; max-width: 700px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 20px; }
         .payment-item { background: #f8fafc; border-radius: 12px; padding: 8px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
         .filter-active { background-color: #dc2626 !important; color: white !important; border-color: #dc2626 !important; }
-        .preview-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; overflow: auto; padding: 20px; }
-        .preview-overlay.active { display: flex; align-items: center; justify-content: center; }
-        .preview-content { background: white; max-width: 800px; width: 100%; border-radius: 12px; overflow: hidden; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-        th { background: #f9fafb; font-weight: 600; font-size: 12px; text-transform: uppercase; color: #4b5563; }
-        .search-highlight { background-color: #fef3c7; }
+        .sync-success { background-color: #dcfce7; border: 1px solid #16a34a; }
+        .sync-warning { background-color: #fef3c7; border: 1px solid #d97706; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -39,7 +34,7 @@
     <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4">
         <div>
             <h1 class="text-3xl font-bold text-red-700"><i class="fas fa-file-invoice-dollar mr-2"></i>Fire.net.pk Bill Printer</h1>
-            <p class="text-gray-500">Search | Filters | Sync Payments | Auto-Generate | WhatsApp | PDF Export</p>
+            <p class="text-gray-500">Sync with Main App | Search | Filters | Auto-Generate | WhatsApp | PDF Export</p>
         </div>
         <div class="flex gap-2">
             <button id="downloadTemplateBtn" class="bg-gray-700 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-download"></i> CSV Template</button>
@@ -47,14 +42,17 @@
         </div>
     </div>
 
-    <!-- Dashboard KPIs - All calculations verified -->
+    <!-- Dashboard KPIs -->
     <div id="dashboardCards" class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6"></div>
+
+    <!-- Sync Status Alert -->
+    <div id="syncAlert" class="mb-4 p-3 rounded-xl hidden"></div>
 
     <!-- Action Buttons -->
     <div class="flex flex-wrap gap-3 mb-6">
         <button id="openAddBillBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-plus-circle"></i> Manual Bill</button>
         <button id="autoGenerateBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-magic"></i> Auto Generate</button>
-        <button id="syncFinanceBtn" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-sync-alt"></i> Sync Payments</button>
+        <button id="syncFinanceBtn" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-sync-alt"></i> Sync from Main App</button>
         <label class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl shadow cursor-pointer"><i class="fas fa-upload"></i> Import CSV <input type="file" id="csvUpload" accept=".csv" class="hidden"></label>
         <button id="bulkPrintBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-print"></i> Bulk Print</button>
         <button id="exportPdfBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl shadow"><i class="fas fa-file-pdf"></i> Export PDF</button>
@@ -106,7 +104,7 @@
                 <tbody id="billsTbody"></tbody>
             </table>
         </div>
-        <div id="noBillsMsg" class="text-center py-8 text-gray-400 hidden">No bills found.</div>
+        <div id="noBillsMsg" class="text-center py-8 text-gray-400 hidden">No bills found. Click "Auto Generate" or "Sync from Main App" to load data.</div>
         <div id="paginationControls" class="flex justify-between items-center px-4 py-3 border-t bg-gray-50 no-print"></div>
     </div>
 </div>
@@ -128,7 +126,6 @@
     // Helper functions
     function getMonthDateRange(yearMonth) { let [y,m]=yearMonth.split('-').map(Number); let start=new Date(y,m-1,1), end=new Date(y,m,0); return { start: start.toLocaleDateString(), end: end.toLocaleDateString() }; }
     
-    // VERIFIED CALCULATION: Net Due = Bill Amount - Discount - Total Paid
     function recalcBill(b) { 
         let totalPaid = (b.payments || []).reduce((s,p)=>s+(p.amount||0),0); 
         b.alreadyPaid = totalPaid; 
@@ -149,7 +146,7 @@
     function numberFormat(n){ return (Number(n)||0).toLocaleString(); }
     function today(){ return new Date().toISOString().slice(0,10); }
 
-    // Load initial data
+    // Load initial data with demo bill
     function loadData(){
         let stored = localStorage.getItem(STORAGE_KEY);
         if(stored){ 
@@ -157,6 +154,7 @@
             nextId = Math.max(0, ...bills.map(b=>b.id), 0) + 1;
             recalcAll();
         } else {
+            // Demo bill from your screenshot
             bills = [{
                 id: 1, customerName: "Sheraz", mobile: "03021433803", clientCode: "0518", 
                 package: "4mb", area: "HEAD QUARTER", userId: "HQSabir", billMonth: "2026-06", 
@@ -171,61 +169,149 @@
         applyFiltersAndRender();
         updateDashboard();
         updateFilters();
+        checkMainAppData();
     }
 
-    // SYNC PAYMENTS FROM MAIN APP - Fetches paid amounts from finance records
-    function syncPaymentsFromMainApp() {
+    // Check if main app data exists and show alert
+    function checkMainAppData(){
+        const mainData = localStorage.getItem('firenet_clean_fixed_v1');
+        const alertDiv = document.getElementById('syncAlert');
+        if(!mainData){
+            alertDiv.className = 'mb-4 p-3 rounded-xl sync-warning';
+            alertDiv.innerHTML = '<i class="fas fa-exclamation-triangle text-amber-600 mr-2"></i><strong>Main app not detected.</strong> Click "Sync from Main App" after opening your main ISP management app, or use "Auto Generate" to create bills manually.';
+            alertDiv.classList.remove('hidden');
+        } else {
+            alertDiv.className = 'mb-4 p-3 rounded-xl sync-success';
+            alertDiv.innerHTML = '<i class="fas fa-check-circle text-green-600 mr-2"></i><strong>Ready to sync!</strong> Main app data found. Click "Sync from Main App" to import clients and payments.';
+            alertDiv.classList.remove('hidden');
+        }
+    }
+
+    // SYNC FROM MAIN APP - Fixed to properly read all possible storage keys
+    function syncFromMainApp() {
         try {
-            const mainData = localStorage.getItem('firenet_clean_fixed_v1');
-            if (!mainData) { alert("Main app data not found. Please open main ISP app first."); return; }
+            // Try multiple possible storage keys from main app
+            let mainData = localStorage.getItem('firenet_clean_fixed_v1');
+            if (!mainData) mainData = localStorage.getItem('firenet_clean_fixed');
+            if (!mainData) mainData = localStorage.getItem('firenet_data');
+            if (!mainData) mainData = localStorage.getItem('firenet_main');
+            
+            if (!mainData) { 
+                alert("Main app data not found.\n\nPlease open your main ISP management app first, then return to this page and click Sync again.\n\nAlternatively, click 'Auto Generate' to manually create bills.");
+                checkMainAppData();
+                return; 
+            }
+            
             const main = JSON.parse(mainData);
             const clients = main.clients || [];
             const finance = main.finance || [];
+            const invoices = main.invoices || [];
             
-            let updatedCount = 0;
+            if(!clients.length){
+                alert("No clients found in main app. Please add clients first.");
+                return;
+            }
             
-            for (let bill of bills) {
-                const client = clients.find(c => (c.ccode === bill.clientCode) || (c.pin === bill.clientCode) || (c.mobile === bill.mobile));
-                if (!client) continue;
+            let month = currentMonthFilter;
+            let existingCodes = bills.filter(b=>b.billMonth===month).map(b=>b.clientCode);
+            let added = 0;
+            let updated = 0;
+            let totalAmount = 0;
+            
+            for(let c of clients){
+                if(!c.name || !c.mobile) continue;
+                let code = c.ccode || c.pin || c.id?.slice(-4) || '0000';
                 
-                // Find all income entries for this client in the current bill month
-                const payments = finance.filter(f => 
-                    (f.clientId === client.id || f.phone === client.mobile || f.customer === client.name || f.paidBy === client.name) &&
+                // Get amount from client record or invoices
+                let amount = c.bill || c.monthlyFee || c.monthly_bill || 0;
+                if(amount <= 0){
+                    // Try to find from invoices
+                    let clientInvoices = invoices.filter(inv => inv.clientId === c.id || inv.phone === c.mobile);
+                    amount = clientInvoices.reduce((s,inv)=> s + (inv.total || 0), 0);
+                    if(amount <= 0) amount = 1500;
+                }
+                
+                // Find payments for this client
+                let payments = finance.filter(f => 
+                    (f.clientId === c.id || f.phone === c.mobile || f.customer === c.name || f.paidBy === c.name) &&
                     f.type !== 'expense' &&
-                    (f.billMonth === bill.billMonth || f.date?.slice(0,7) === bill.billMonth)
+                    (f.billMonth === month || f.date?.slice(0,7) === month)
                 ).map(f => ({ 
                     amount: f.amount || 0, 
-                    method: f.mode || f.payment_mode || (f.type === 'income' ? 'Cash' : 'Expense'), 
+                    method: f.mode || f.payment_mode || 'Cash', 
                     date: f.date || f.time || today(), 
-                    note: f.note || f.receiptId || '',
-                    receiptId: f.receiptId
+                    note: f.note || f.receiptId || ''
                 }));
                 
-                if (payments.length > 0) {
-                    bill.payments = payments;
-                    recalcBill(bill);
-                    updatedCount++;
+                if(existingCodes.includes(code)){
+                    // Update existing bill's payments
+                    let existingBill = bills.find(b => b.clientCode === code && b.billMonth === month);
+                    if(existingBill && payments.length > 0){
+                        existingBill.payments = payments;
+                        recalcBill(existingBill);
+                        updated++;
+                    }
+                } else {
+                    // Create new bill
+                    let newBill = { 
+                        id: nextId++, 
+                        customerName: c.name, 
+                        mobile: c.mobile, 
+                        clientCode: code, 
+                        package: c.package || 'Standard', 
+                        area: c.area || c.address || '', 
+                        userId: c.pppoe || c.username || '', 
+                        billMonth: month, 
+                        issueDate: today(), 
+                        dueDate: c.dueDate || c.exDate || `${month}-10`, 
+                        monthlyBillAmount: amount, 
+                        discount: 0, 
+                        payments: payments, 
+                        qrDataURL: null 
+                    };
+                    recalcBill(newBill);
+                    bills.push(newBill);
+                    added++;
+                    totalAmount += amount;
                 }
             }
             
-            if (updatedCount > 0) {
-                saveLocal();
-                applyFiltersAndRender();
-                updateDashboard();
-                alert(`Synced payments for ${updatedCount} bills from main app.\nTotal collected: Rs. ${bills.reduce((s,b)=>s+b.alreadyPaid,0).toLocaleString()}`);
+            if(added > 0 || updated > 0) { 
+                saveLocal(); 
+                applyFiltersAndRender(); 
+                updateDashboard(); 
+                updateFilters(); 
+                let msg = [];
+                if(added) msg.push(`${added} new bills added`);
+                if(updated) msg.push(`${updated} bills updated with payments`);
+                msg.push(`Total collected: Rs. ${bills.filter(b=>b.billMonth===month).reduce((s,b)=>s+b.alreadyPaid,0).toLocaleString()}`);
+                alert(msg.join('\n'));
             } else {
-                alert("No new payments found. Make sure main app has finance income entries.");
+                alert("All clients already have bills for this month.\nUse 'Auto Generate' for a different month or add payments manually.");
             }
-        } catch(e) { console.error(e); alert("Sync failed: " + e.message); }
+        } catch(e) { 
+            console.error(e); 
+            alert("Sync failed: " + e.message + "\n\nMake sure the main app data structure is correct."); 
+        }
     }
 
     // Auto Generate Bills from Main App Clients
     function autoGenerateBills(){
         let mainData = localStorage.getItem('firenet_clean_fixed_v1');
-        if(!mainData){ alert("Main app data not found. Please open main ISP app first."); return; }
+        if(!mainData) mainData = localStorage.getItem('firenet_clean_fixed');
+        if(!mainData) mainData = localStorage.getItem('firenet_data');
+        
+        if(!mainData){ 
+            alert("Main app data not found.\n\nPlease open your main ISP management app first, then return and click 'Sync from Main App'.\n\nAlternatively, import a CSV file manually."); 
+            return; 
+        }
+        
         let main = JSON.parse(mainData);
         let clients = main.clients || [];
-        if(!clients.length){ alert("No clients found in main app."); return; }
+        if(!clients.length){ 
+            alert("No clients found in main app."); 
+            return; 
+        }
         
         let month = currentMonthFilter;
         let existingCodes = bills.filter(b=>b.billMonth===month).map(b=>b.clientCode);
@@ -236,6 +322,7 @@
             if(!c.name || !c.mobile) continue;
             let code = c.ccode || c.pin || c.id?.slice(-4) || '0000';
             if(existingCodes.includes(code)) continue;
+            
             let amount = c.bill || c.monthlyFee || c.monthly_bill || 0;
             if(amount <= 0) amount = 1500;
             
@@ -249,7 +336,7 @@
                 userId: c.pppoe || c.username || '', 
                 billMonth: month, 
                 issueDate: today(), 
-                dueDate: `${month}-${c.dueDay || '10'}`, 
+                dueDate: c.dueDate || c.exDate || `${month}-10`, 
                 monthlyBillAmount: amount, 
                 discount: 0, 
                 payments: [], 
@@ -260,6 +347,7 @@
             added++;
             totalAmount += amount;
         }
+        
         if(added) { 
             saveLocal(); 
             applyFiltersAndRender(); 
@@ -267,7 +355,7 @@
             updateFilters(); 
             alert(`Generated ${added} bills for ${month}\nTotal bill amount: Rs. ${totalAmount.toLocaleString()}`);
         } else {
-            alert("All clients already have bills for this month.");
+            alert("All clients already have bills for this month. Change the month filter to generate for a different month.");
         }
     }
 
@@ -280,11 +368,9 @@
         pkgSel.innerHTML = '<option value="">All Packages</option>' + packages.map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
     }
 
-    // Apply all filters including search
     function applyFiltersAndRender(){
         let filtered = bills.filter(b => b.billMonth === currentMonthFilter);
         
-        // Apply search filter
         if(currentSearch.trim()){
             let searchLower = currentSearch.toLowerCase();
             filtered = filtered.filter(b => 
@@ -297,16 +383,13 @@
             );
         }
         
-        // Apply status filter
         if(currentFilter === 'paid') filtered = filtered.filter(b=>getBillStatus(b)==='paid');
         else if(currentFilter === 'unpaid') filtered = filtered.filter(b=>getBillStatus(b)==='unpaid');
         else if(currentFilter === 'partial') filtered = filtered.filter(b=>getBillStatus(b)==='partial');
         
-        // Apply area filter
         let areaVal = document.getElementById('areaFilter')?.value||'';
         if(areaVal) filtered = filtered.filter(b=>b.area === areaVal);
         
-        // Apply package filter
         let pkgVal = document.getElementById('packageFilter')?.value||'';
         if(pkgVal) filtered = filtered.filter(b=>b.package === pkgVal);
         
@@ -324,7 +407,7 @@
         let pageBills = filteredBills.slice(start, start+PAGE_SIZE);
         
         if(pageBills.length === 0 && filteredBills.length === 0){ 
-            tbody.innerHTML = '<tr><td colspan="13" class="text-center py-8 text-gray-400">No bills found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" class="text-center py-8 text-gray-400">No bills found. Click "Sync from Main App" or "Auto Generate".</td></tr>';
             document.getElementById('paginationControls').innerHTML = ''; 
             return; 
         }
@@ -400,7 +483,7 @@
         document.querySelectorAll('.bill-select').forEach(cb => cb.addEventListener('change', updateSelectAllHeader));
     }
 
-    // Dashboard with VERIFIED calculations
+    // Dashboard
     function updateDashboard(){ 
         let monthBills = bills.filter(b=>b.billMonth === currentMonthFilter); 
         let totalBill = monthBills.reduce((s,b)=>s+b.monthlyBillAmount,0); 
@@ -554,16 +637,14 @@
     });
     
     document.getElementById('autoGenerateBtn').addEventListener('click', autoGenerateBills);
-    document.getElementById('syncFinanceBtn').addEventListener('click', syncPaymentsFromMainApp);
+    document.getElementById('syncFinanceBtn').addEventListener('click', syncFromMainApp);
     document.getElementById('areaFilter').addEventListener('change', applyFiltersAndRender);
     document.getElementById('packageFilter').addEventListener('change', applyFiltersAndRender);
     document.getElementById('monthFilter').value = currentMonthFilter; 
     document.getElementById('monthFilter').addEventListener('change', (e) => { currentMonthFilter = e.target.value; applyFiltersAndRender(); updateDashboard(); });
     
-    // Search input
     document.getElementById('searchInput').addEventListener('input', (e) => { currentSearch = e.target.value; applyFiltersAndRender(); });
     
-    // Filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', () => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('filter-active','bg-red-600','text-white')); 
         btn.classList.add('filter-active','bg-red-600','text-white'); 
@@ -692,7 +773,6 @@
         e.target.value = ''; 
     });
 
-    // CSV Template Download
     document.getElementById('downloadTemplateBtn').addEventListener('click', () => { 
         let headers = ["Customer Name","Mobile","Client Code","Package","Area","User ID / PPPoE","Bill Month","Issue Date","Due Date","Monthly Bill Amount","Discount","Already Paid"]; 
         let sample = ["Sheraz","03021433803","0518","4mb","HEAD QUARTER","HQSabir","2026-06","2026-06-04","2026-06-10","2200","200","1000"]; 
@@ -704,7 +784,6 @@
         a.click(); 
     });
 
-    // Export CSV
     document.getElementById('exportBillsBtn').addEventListener('click', () => { 
         let exportData = bills.map(b => ({
             "Customer Name": b.customerName,
@@ -730,30 +809,7 @@
         a.click(); 
     });
 
-    // Preview
-    document.getElementById('previewPrintBtn')?.addEventListener('click', async() => { 
-        let ids = getSelectedBillIds(); 
-        if(!ids.length) alert("Select bills to preview"); 
-        else{ 
-            let selected = bills.filter(b=>ids.includes(b.id)); 
-            let previewHtml = ''; 
-            for(let b of selected){ 
-                let qr = await generateQR(b); 
-                previewHtml += `<div style="border:1px solid #ccc;margin:10px;padding:10px;"><h3>${b.customerName} - ${b.billMonth}</h3><p>Due: Rs.${b.netDue}</p><img src="${qr}" width="80"></div>`; 
-            } 
-            document.getElementById('previewFrame').innerHTML = previewHtml; 
-            document.getElementById('previewOverlay').classList.add('active'); 
-        } 
-    });
-    
-    document.getElementById('closePreviewBtn')?.addEventListener('click', () => document.getElementById('previewOverlay').classList.remove('active'));
-    document.getElementById('doPrintPreviewBtn')?.addEventListener('click', async() => { 
-        let ids = getSelectedBillIds(); 
-        if(ids.length) await printBills(bills.filter(b=>ids.includes(b.id))); 
-        document.getElementById('previewOverlay').classList.remove('active'); 
-    });
-
     loadData();
 </script>
 </body>
-</html>
+</html>   
