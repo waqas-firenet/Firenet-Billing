@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Fire.net.pk - Bill Printer with Edit Bill Fix</title>
+    <title>Fire.net.pk - Bill Printer with Editable Paid Amount</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -33,6 +33,7 @@
         .btn-wa:hover { background-color: #128C7E; }
         .payment-row { background: #f8fafc; border-radius: 8px; padding: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
         .total-received-box { background: #dcfce7; border-radius: 10px; padding: 10px; margin: 10px 0; text-align: center; }
+        .editable-paid { background: #fff3cd; border: 1px solid #ffc107; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -41,7 +42,7 @@
     <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4">
         <div>
             <h1 class="text-3xl font-bold text-red-700"><i class="fas fa-file-invoice-dollar mr-2"></i>Fire.net.pk Bill Printer</h1>
-            <p class="text-gray-500">Main App QR | Edit Bill with Payment History | WhatsApp | Bulk Print</p>
+            <p class="text-gray-500">Edit Paid Amount | Payment History | Main App QR | WhatsApp</p>
         </div>
         <div class="flex gap-2">
             <button id="downloadTemplateBtn" class="bg-gray-700 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-download"></i> CSV Template</button>
@@ -99,7 +100,7 @@
                         <th class="px-3 py-3 text-right text-xs font-medium">Due</th>
                         <th class="px-3 py-3 text-left text-xs font-medium">Status</th>
                         <th class="px-3 py-3 text-center text-xs font-medium">Actions</th>
-                    <tr>
+                    </tr>
                 </thead>
                 <tbody id="billsTbody"></tbody>
             </table>
@@ -110,10 +111,9 @@
 </div>
 
 <div id="billModal" class="modal-bg"><div class="modal"><div class="flex justify-between border-b pb-2 mb-3"><h2 class="text-xl font-bold" id="modalTitle">Bill</h2><button id="closeModalBtn" class="text-gray-500 text-2xl">&times;</button></div><div id="modalBody"></div></div></div>
-<div id="previewOverlay" class="preview-overlay"><div class="preview-content"><div class="bg-white p-4 border-b flex justify-between"><h3 class="font-bold">Print Preview</h3><button id="closePreviewBtn" class="text-red-500">&times;</button></div><div id="previewFrame" style="height: 80vh; overflow: auto; padding: 10px;"></div><div class="p-3 border-t flex justify-end"><button id="doPrintPreviewBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Print Now</button></div></div></div>
 
 <script>
-    // ------------------- FIREBASE CONFIG -------------------
+    // Firebase Config
     const firebaseConfig = {
         apiKey: 'AIzaSyDEOfh1JufNuoEIMEZ_tgt1Lg4PSLLUE7E',
         authDomain: 'complaint-b1f3c.firebaseapp.com',
@@ -125,7 +125,6 @@
     
     let db = null;
     let isFirebaseConnected = false;
-    
     let bills = [];
     let nextId = 1;
     const STORAGE_KEY = 'bill_print_tool_firebase';
@@ -383,7 +382,7 @@ Please pay before due date.
         let start = (currentPage-1)*PAGE_SIZE;
         let pageBills = filteredBills.slice(start, start+PAGE_SIZE);
         if(pageBills.length === 0 && filteredBills.length === 0){ 
-            tbody.innerHTML = '<tr><td colspan="12" class="text-center py-8 text-gray-400">No bills found. Sync from Firebase.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center py-8 text-gray-400">No bills found. Sync from Firebase.</td><tr>';
             return; 
         }
         tbody.innerHTML = pageBills.map(bill => {
@@ -481,26 +480,60 @@ Please pay before due date.
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-purple-500"><div class="text-xs">Paid/Partial/Unpaid</div><div class="text-lg font-bold">${paidCount}/${partialCount}/${unpaidCount}</div></div>`;
     }
     
-    // ============= FIXED EDIT BILL MODAL WITH RECEIVED AMOUNT SHOWING =============
+    // ============= FIXED EDIT BILL MODAL WITH EDITABLE PAID AMOUNT =============
     function openBillModal(bill) {
-        let paymentsHtml = '';
-        let totalReceived = 0;
+        // Store working copy of payments
+        let workingPayments = [...(bill.payments || [])];
         
-        if (bill.payments && bill.payments.length > 0) {
-            paymentsHtml = bill.payments.map((p, idx) => {
-                totalReceived += p.amount;
-                return `<div class="payment-row">
-                    <div><span class="font-medium">Rs. ${numberFormat(p.amount)}</span> via <span class="text-sm">${escapeHtml(p.method)}</span></div>
-                    <div class="text-right">
-                        <div class="text-xs text-gray-500">${p.timestamp || p.date || ''}</div>
-                        <button class="text-red-500 text-xs remove-payment-btn" data-idx="${idx}"><i class="fas fa-trash"></i> Remove</button>
-                    </div>
-                </div>`;
-            }).join('');
-        } else {
-            paymentsHtml = '<div class="text-gray-400 text-center py-3">No payments recorded yet</div>';
+        function calculateTotalsAndUpdate() {
+            let totalPaid = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
+            let monthlyAmount = parseFloat(document.getElementById('eAmount')?.value) || 0;
+            let discount = parseFloat(document.getElementById('eDiscount')?.value) || 0;
+            let netDue = monthlyAmount - discount - totalPaid;
+            
+            let totalPaidSpan = document.getElementById('totalPaidSpan');
+            let netDueSpan = document.getElementById('netDueSpan');
+            if (totalPaidSpan) totalPaidSpan.innerText = numberFormat(totalPaid);
+            if (netDueSpan) netDueSpan.innerText = numberFormat(netDue > 0 ? netDue : 0);
+            
+            // Update due input if exists
+            let dueInput = document.getElementById('eDueAmount');
+            if (dueInput) dueInput.value = netDue > 0 ? netDue : 0;
         }
         
+        function renderPaymentsList() {
+            let container = document.getElementById('paymentsListContainer');
+            if (!container) return;
+            
+            if (workingPayments.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 text-center py-3">No payments recorded yet</div>';
+                return;
+            }
+            
+            container.innerHTML = workingPayments.map((p, idx) => `
+                <div class="payment-row">
+                    <div>
+                        <span class="font-medium">Rs. ${numberFormat(p.amount)}</span> 
+                        via <span class="text-sm">${escapeHtml(p.method)}</span>
+                        <div class="text-xs text-gray-500">${p.timestamp || p.date || ''}</div>
+                    </div>
+                    <div>
+                        <button class="text-red-500 text-xs remove-payment-btn" data-idx="${idx}"><i class="fas fa-trash"></i> Remove</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.querySelectorAll('.remove-payment-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    let idx = parseInt(btn.dataset.idx);
+                    workingPayments.splice(idx, 1);
+                    renderPaymentsList();
+                    calculateTotalsAndUpdate();
+                });
+            });
+        }
+        
+        // Build modal HTML with editable paid amount section
         let html = `
             <div class="space-y-4">
                 <!-- Customer Info -->
@@ -515,35 +548,61 @@ Please pay before due date.
                     <div><label class="text-sm font-bold">Due Date</label><input id="eDue" value="${bill.dueDate}" class="border rounded p-2 w-full"></div>
                 </div>
                 
-                <!-- Bill Amount -->
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="text-sm font-bold">Monthly Bill (Rs)</label><input id="eAmount" type="number" value="${bill.monthlyBillAmount}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">Discount (Rs)</label><input id="eDiscount" type="number" value="${bill.discount}" class="border rounded p-2 w-full"></div>
+                <!-- Bill Amount Section -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div><label class="text-sm font-bold">Monthly Bill (Rs)</label><input id="eAmount" type="number" value="${bill.monthlyBillAmount}" class="border rounded p-2 w-full" oninput="if(window.calcTotals) window.calcTotals()"></div>
+                    <div><label class="text-sm font-bold">Discount (Rs)</label><input id="eDiscount" type="number" value="${bill.discount}" class="border rounded p-2 w-full" oninput="if(window.calcTotals) window.calcTotals()"></div>
+                    <div><label class="text-sm font-bold">Net Due (Rs)</label><input id="eDueAmount" type="number" readonly class="border rounded p-2 w-full bg-gray-100" value="${bill.netDue}"></div>
+                </div>
+                
+                <!-- EDITABLE PAID AMOUNT SECTION - NEW -->
+                <div class="border-2 border-blue-300 rounded-lg p-3 bg-blue-50">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-sm font-bold text-blue-800"><i class="fas fa-edit"></i> EDIT PAID AMOUNT</label>
+                        <span class="text-xs text-blue-600">Directly edit total received</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-sm">Total Paid Amount (Rs)</label>
+                            <input id="editableTotalPaid" type="number" value="${bill.alreadyPaid}" class="border-2 border-blue-400 rounded p-2 w-full editable-paid" oninput="updatePaymentsFromTotal()">
+                            <p class="text-xs text-gray-500 mt-1">Edit this amount to adjust total received</p>
+                        </div>
+                        <div>
+                            <label class="text-sm">Payment Method</label>
+                            <select id="editPaymentMethod" class="border rounded p-2 w-full">
+                                <option value="Cash">Cash</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="JazzCash">JazzCash</option>
+                                <option value="Easypaisa">Easypaisa</option>
+                            </select>
+                            <button id="applyPaidAmountBtn" class="mt-2 bg-blue-600 text-white text-sm px-3 py-1 rounded w-full">Apply & Add as Payment</button>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Total Received Display -->
                 <div class="total-received-box">
                     <span class="text-sm font-bold">💰 Total Received: </span>
-                    <span class="text-xl font-bold text-green-600">Rs. ${numberFormat(totalReceived)}</span>
+                    <span id="totalPaidSpan" class="text-xl font-bold text-green-600">Rs. ${numberFormat(bill.alreadyPaid)}</span>
+                    <span class="text-sm mx-2">|</span>
+                    <span class="text-sm font-bold">Net Due: </span>
+                    <span id="netDueSpan" class="text-xl font-bold text-red-600">Rs. ${numberFormat(bill.netDue)}</span>
                 </div>
                 
                 <!-- Payment History -->
                 <div class="border-t pt-3">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="font-bold"><i class="fas fa-history"></i> Payment History</h3>
-                        <button id="addPaymentFromEditBtn" class="bg-green-500 text-white text-xs px-3 py-1 rounded-full">+ Add Payment</button>
+                        <button id="addPaymentFromEditBtn" class="bg-green-500 text-white text-xs px-3 py-1 rounded-full">+ Add Single Payment</button>
                     </div>
                     <div id="paymentsListContainer" class="max-h-48 overflow-auto bg-gray-50 rounded-lg p-2">
-                        ${paymentsHtml}
-                    </div>
-                </div>
-                
-                <!-- Summary -->
-                <div class="bg-gray-100 p-3 rounded-lg text-center">
-                    <div class="grid grid-cols-3 gap-2">
-                        <div><span class="text-xs">Bill Amount</span><br><b>Rs. ${numberFormat(bill.monthlyBillAmount)}</b></div>
-                        <div><span class="text-xs">Discount</span><br><b>Rs. ${numberFormat(bill.discount)}</b></div>
-                        <div><span class="text-xs">Net Due</span><br><b class="text-red-600">Rs. ${numberFormat(bill.netDue)}</b></div>
+                        ${workingPayments.length === 0 ? '<div class="text-gray-400 text-center py-3">No payments recorded yet</div>' : 
+                            workingPayments.map((p, idx) => `
+                            <div class="payment-row">
+                                <div><span class="font-medium">Rs. ${numberFormat(p.amount)}</span> via <span class="text-sm">${escapeHtml(p.method)}</span><div class="text-xs text-gray-500">${p.timestamp || p.date || ''}</div></div>
+                                <div><button class="text-red-500 text-xs remove-payment-btn" data-idx="${idx}"><i class="fas fa-trash"></i> Remove</button></div>
+                            </div>`).join('')
+                        }
                     </div>
                 </div>
                 
@@ -556,26 +615,65 @@ Please pay before due date.
         
         openModalWithContent(html, 'Edit Bill');
         
-        // Store reference to current bill's payments array
-        let currentPayments = [...(bill.payments || [])];
+        // Function to update payments from total amount
+        window.updatePaymentsFromTotal = function() {
+            let newTotal = parseFloat(document.getElementById('editableTotalPaid')?.value) || 0;
+            let currentTotal = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
+            
+            if (Math.abs(newTotal - currentTotal) < 0.01) return;
+            
+            let difference = newTotal - currentTotal;
+            
+            if (difference > 0) {
+                // Add a new payment for the difference
+                let method = document.getElementById('editPaymentMethod')?.value || 'Cash';
+                workingPayments.push({
+                    amount: difference,
+                    method: method,
+                    date: today(),
+                    timestamp: getCurrentTimestamp(),
+                    note: 'Manual adjustment from edit'
+                });
+            } else if (difference < 0) {
+                // Remove from last payment(s) until difference is covered
+                let amountToRemove = Math.abs(difference);
+                while (amountToRemove > 0 && workingPayments.length > 0) {
+                    let lastPayment = workingPayments[workingPayments.length - 1];
+                    if (lastPayment.amount > amountToRemove) {
+                        lastPayment.amount -= amountToRemove;
+                        amountToRemove = 0;
+                    } else {
+                        amountToRemove -= lastPayment.amount;
+                        workingPayments.pop();
+                    }
+                }
+            }
+            
+            renderPaymentsList();
+            calculateTotalsAndUpdate();
+        };
         
-        // Function to update the payment list display
-        function updatePaymentsDisplay() {
+        window.calcTotals = function() {
+            calculateTotalsAndUpdate();
+        };
+        
+        function renderPaymentsList() {
             let container = document.getElementById('paymentsListContainer');
             if (!container) return;
-            let newTotal = currentPayments.reduce((s, p) => s + (p.amount || 0), 0);
-            let totalDiv = document.querySelector('.total-received-box');
-            if (totalDiv) totalDiv.innerHTML = `<span class="text-sm font-bold">💰 Total Received: </span><span class="text-xl font-bold text-green-600">Rs. ${numberFormat(newTotal)}</span>`;
             
-            if (currentPayments.length === 0) {
+            if (workingPayments.length === 0) {
                 container.innerHTML = '<div class="text-gray-400 text-center py-3">No payments recorded yet</div>';
                 return;
             }
-            container.innerHTML = currentPayments.map((p, idx) => `
+            
+            container.innerHTML = workingPayments.map((p, idx) => `
                 <div class="payment-row">
-                    <div><span class="font-medium">Rs. ${numberFormat(p.amount)}</span> via <span class="text-sm">${escapeHtml(p.method)}</span></div>
-                    <div class="text-right">
+                    <div>
+                        <span class="font-medium">Rs. ${numberFormat(p.amount)}</span> 
+                        via <span class="text-sm">${escapeHtml(p.method)}</span>
                         <div class="text-xs text-gray-500">${p.timestamp || p.date || ''}</div>
+                    </div>
+                    <div>
                         <button class="text-red-500 text-xs remove-payment-btn" data-idx="${idx}"><i class="fas fa-trash"></i> Remove</button>
                     </div>
                 </div>
@@ -584,13 +682,38 @@ Please pay before due date.
             document.querySelectorAll('.remove-payment-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     let idx = parseInt(btn.dataset.idx);
-                    currentPayments.splice(idx, 1);
-                    updatePaymentsDisplay();
+                    workingPayments.splice(idx, 1);
+                    renderPaymentsList();
+                    calculateTotalsAndUpdate();
+                    // Update editable total field
+                    let newTotal = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
+                    let totalInput = document.getElementById('editableTotalPaid');
+                    if (totalInput) totalInput.value = newTotal;
                 });
             });
         }
         
-        // Add payment button
+        function calculateTotalsAndUpdate() {
+            let totalPaid = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
+            let monthlyAmount = parseFloat(document.getElementById('eAmount')?.value) || 0;
+            let discount = parseFloat(document.getElementById('eDiscount')?.value) || 0;
+            let netDue = monthlyAmount - discount - totalPaid;
+            
+            let totalPaidSpan = document.getElementById('totalPaidSpan');
+            let netDueSpan = document.getElementById('netDueSpan');
+            if (totalPaidSpan) totalPaidSpan.innerText = numberFormat(totalPaid);
+            if (netDueSpan) netDueSpan.innerText = numberFormat(netDue > 0 ? netDue : 0);
+            
+            let dueInput = document.getElementById('eDueAmount');
+            if (dueInput) dueInput.value = netDue > 0 ? netDue : 0;
+            
+            let editableTotal = document.getElementById('editableTotalPaid');
+            if (editableTotal && parseFloat(editableTotal.value) !== totalPaid) {
+                editableTotal.value = totalPaid;
+            }
+        }
+        
+        // Add single payment button
         let addBtn = document.getElementById('addPaymentFromEditBtn');
         if (addBtn) {
             addBtn.onclick = () => {
@@ -599,15 +722,61 @@ Please pay before due date.
                 let method = prompt("Payment method (Cash, Bank, JazzCash, Easypaisa)", "Cash");
                 let date = prompt("Date (YYYY-MM-DD)", today());
                 if (method && date) {
-                    currentPayments.push({
+                    workingPayments.push({
                         amount: amount,
                         method: method,
                         date: date,
                         timestamp: getCurrentTimestamp(),
                         note: ""
                     });
-                    updatePaymentsDisplay();
+                    renderPaymentsList();
+                    calculateTotalsAndUpdate();
+                    let totalInput = document.getElementById('editableTotalPaid');
+                    if (totalInput) totalInput.value = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
                 }
+            };
+        }
+        
+        // Apply paid amount button
+        let applyBtn = document.getElementById('applyPaidAmountBtn');
+        if (applyBtn) {
+            applyBtn.onclick = () => {
+                let newTotal = parseFloat(document.getElementById('editableTotalPaid')?.value) || 0;
+                let currentTotal = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
+                let difference = newTotal - currentTotal;
+                
+                if (Math.abs(difference) < 0.01) {
+                    alert("Amount is already " + numberFormat(currentTotal));
+                    return;
+                }
+                
+                let method = document.getElementById('editPaymentMethod')?.value || 'Cash';
+                
+                if (difference > 0) {
+                    workingPayments.push({
+                        amount: difference,
+                        method: method,
+                        date: today(),
+                        timestamp: getCurrentTimestamp(),
+                        note: 'Manual adjustment'
+                    });
+                } else {
+                    let amountToRemove = Math.abs(difference);
+                    while (amountToRemove > 0 && workingPayments.length > 0) {
+                        let lastPayment = workingPayments[workingPayments.length - 1];
+                        if (lastPayment.amount > amountToRemove) {
+                            lastPayment.amount -= amountToRemove;
+                            amountToRemove = 0;
+                        } else {
+                            amountToRemove -= lastPayment.amount;
+                            workingPayments.pop();
+                        }
+                    }
+                }
+                
+                renderPaymentsList();
+                calculateTotalsAndUpdate();
+                alert(`Total paid updated to Rs. ${numberFormat(newTotal)}`);
             };
         }
         
@@ -625,7 +794,7 @@ Please pay before due date.
                 bill.dueDate = document.getElementById('eDue').value;
                 bill.monthlyBillAmount = parseFloat(document.getElementById('eAmount').value) || 0;
                 bill.discount = parseFloat(document.getElementById('eDiscount').value) || 0;
-                bill.payments = currentPayments;
+                bill.payments = workingPayments;
                 recalcBill(bill);
                 saveLocal();
                 applyFiltersAndRender();
@@ -637,6 +806,9 @@ Please pay before due date.
         
         let closeEditBtn = document.getElementById('closeEditModalBtn');
         if (closeEditBtn) closeEditBtn.onclick = closeModal;
+        
+        // Initial calculation
+        setTimeout(() => calculateTotalsAndUpdate(), 100);
     }
     
     // Partial Payment Modal
