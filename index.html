@@ -27,8 +27,8 @@
         .btn-wa { background-color: #25D366; color: white; }
         .btn-wa:hover { background-color: #128C7E; }
         .editable-field { background: #fff3cd; border: 2px solid #ffc107; }
-        .invoice-row { transition: background 0.2s; }
-        .invoice-row:hover { background: #fef3c7; }
+        .action-icons i { font-size: 16px; margin: 0 3px; cursor: pointer; transition: 0.2s; }
+        .action-icons i:hover { transform: scale(1.1); }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -37,11 +37,11 @@
     <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4">
         <div>
             <h1 class="text-3xl font-bold text-red-700"><i class="fas fa-file-invoice-dollar mr-2"></i>Fire.net.pk Manager</h1>
-            <p class="text-gray-500">Separate Monthly Bills & Invoices | Firebase Sync</p>
+            <p class="text-gray-500">Monthly Bills (from client fees) | Separate Invoices (excludes monthly bills)</p>
         </div>
         <div class="flex gap-2">
             <button id="downloadTemplateBtn" class="bg-gray-700 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-download"></i> CSV Template</button>
-            <button id="exportBillsBtn" class="bg-green-700 hover:bg-green-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-file-export"></i> Export Bills CSV</button>
+            <button id="exportBillsBtn" class="bg-green-700 hover:bg-green-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-file-export"></i> Export Bills</button>
             <button id="exportInvoicesBtn" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-file-export"></i> Export Invoices</button>
         </div>
     </div>
@@ -65,7 +65,7 @@
     <!-- Tabs -->
     <div class="flex gap-2 mb-4 border-b">
         <button id="tabBillsBtn" class="tab-btn px-5 py-2 rounded-t-lg font-bold bg-red-600 text-white">📋 Monthly Bills</button>
-        <button id="tabInvoicesBtn" class="tab-btn px-5 py-2 rounded-t-lg font-bold bg-gray-200 text-gray-700">📄 Invoices (Separate)</button>
+        <button id="tabInvoicesBtn" class="tab-btn px-5 py-2 rounded-t-lg font-bold bg-gray-200 text-gray-700">📄 Invoices (Real)</button>
     </div>
 
     <!-- Monthly Bills Panel -->
@@ -83,9 +83,11 @@
         <div class="overflow-x-auto">
             <table class="min-w-full">
                 <thead class="bg-gray-50 border-b">
-                    <tr><th class="w-8 px-3 py-3"><input type="checkbox" id="selectAllBills"></th>
+                    <tr>
+                        <th class="w-8 px-3 py-3"><input type="checkbox" id="selectAllBills"></th>
                         <th>Code</th><th>Customer</th><th>Mobile</th><th>Package</th><th>Area</th><th>Month</th>
-                        <th class="text-right">Bill (Rs)</th><th class="text-right">Paid (Rs)</th><th class="text-right">Due (Rs)</th><th>Status</th><th>Actions</th>
+                        <th class="text-right">Bill (Rs)</th><th class="text-right">Paid (Rs)</th><th class="text-right">Due (Rs)</th><th>Status</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="billsTbody"></tbody>
@@ -95,10 +97,10 @@
         <div id="billsPagination" class="flex justify-between items-center px-4 py-3 border-t bg-gray-50"></div>
     </div>
 
-    <!-- Invoices Panel (Separate, never merged) -->
+    <!-- Invoices Panel (Separate, excludes monthly bills) -->
     <div id="invoicesPanel" class="bg-white rounded-2xl shadow overflow-hidden hidden">
         <div class="p-3 bg-gray-50 border-b flex flex-wrap gap-3 items-center">
-            <input type="text" id="invSearch" placeholder="Search customer, work, ID..." class="border rounded-lg px-3 py-1.5 w-64 text-sm">
+            <input type="text" id="invSearch" placeholder="Search client, work, ID..." class="border rounded-lg px-3 py-1.5 w-64 text-sm">
             <select id="invStatusFilter" class="border rounded-lg px-2 py-1.5 text-sm">
                 <option value="all">All Status</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="partial">Partial</option>
             </select>
@@ -108,20 +110,22 @@
         <div class="overflow-x-auto">
             <table class="min-w-full">
                 <thead class="bg-gray-50 border-b">
-                    <tr><th class="w-8 px-3 py-3"><input type="checkbox" id="selectAllInvoices"></th>
+                    <tr>
+                        <th class="w-8 px-3 py-3"><input type="checkbox" id="selectAllInvoices"></th>
                         <th>Invoice ID</th><th>Client</th><th>Mobile</th><th>Work</th><th>Month</th>
-                        <th class="text-right">Total</th><th class="text-right">Received</th><th class="text-right">Due</th><th>Status</th><th>Actions</th>
+                        <th class="text-right">Total</th><th class="text-right">Received</th><th class="text-right">Due</th><th>Status</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="invoicesTbody"></tbody>
             </table>
         </div>
-        <div id="noInvoicesMsg" class="text-center py-8 text-gray-400 hidden">No invoices. Sync from Firebase.</div>
+        <div id="noInvoicesMsg" class="text-center py-8 text-gray-400 hidden">No real invoices found (monthly bills excluded).</div>
         <div id="invoicesPagination" class="flex justify-between items-center px-4 py-3 border-t bg-gray-50"></div>
     </div>
 </div>
 
-<!-- Modal for Edit Bill/Invoice -->
+<!-- Modal for Edit/Receive -->
 <div id="genericModal" class="modal-bg"><div class="modal"><div class="flex justify-between border-b pb-2 mb-3"><h2 class="text-xl font-bold" id="modalTitle">Edit</h2><button id="closeModalBtn" class="text-gray-500 text-2xl">&times;</button></div><div id="modalBody"></div></div></div>
 
 <script>
@@ -140,10 +144,10 @@
     
     // Separate data stores
     let monthlyBills = [];
-    let invoices = [];
+    let realInvoices = [];  // Only invoices that are NOT "Monthly Bill"
     let nextBillId = 1;
     let nextInvoiceId = 1;
-    const STORAGE_KEY = 'firenet_separate_v1';
+    const STORAGE_KEY = 'firenet_separate_v2';
     
     // UI state
     let currentBillPage = 1, currentInvoicePage = 1;
@@ -154,7 +158,6 @@
     // Cached Firebase data
     let clientsData = [];
     let financeData = [];
-    let firebaseInvoices = [];
     
     // Helper functions
     function getCurrentTimestamp() { return new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }); }
@@ -176,7 +179,7 @@
     }
     
     function recalcAllBills() { monthlyBills.forEach(b=>recalcBill(b)); }
-    function saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify({monthlyBills, invoices, nextBillId, nextInvoiceId})); }
+    function saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify({monthlyBills, realInvoices, nextBillId, nextInvoiceId})); }
     
     function loadLocal() {
         try {
@@ -184,17 +187,17 @@
             if(stored) {
                 let data = JSON.parse(stored);
                 monthlyBills = data.monthlyBills || [];
-                invoices = data.invoices || [];
+                realInvoices = data.realInvoices || [];
                 nextBillId = data.nextBillId || Math.max(0, ...monthlyBills.map(b=>b.id), 0) + 1;
-                nextInvoiceId = data.nextInvoiceId || Math.max(0, ...invoices.map(i=>i.id), 0) + 1;
+                nextInvoiceId = data.nextInvoiceId || Math.max(0, ...realInvoices.map(i=>i.id), 0) + 1;
                 recalcAllBills();
             } else {
                 monthlyBills = [];
-                invoices = [];
+                realInvoices = [];
                 nextBillId = 1;
                 nextInvoiceId = 1;
             }
-        } catch(e) { console.error(e); monthlyBills=[]; invoices=[]; nextBillId=1; nextInvoiceId=1; }
+        } catch(e) { console.error(e); monthlyBills=[]; realInvoices=[]; nextBillId=1; nextInvoiceId=1; }
     }
     
     function getBillStatus(b) { if(b.due===0) return 'paid'; if(b.alreadyPaid>0) return 'partial'; return 'unpaid'; }
@@ -204,7 +207,7 @@
     function updateDashboard() {
         let month = billFilters.month;
         let monthBills = monthlyBills.filter(b=>b.month===month);
-        let monthInvoices = invoices.filter(i=>i.month===month);
+        let monthInvoices = realInvoices.filter(i=>i.month===month);
         let totalBill = monthBills.reduce((s,b)=>s+(b.amount||0),0);
         let totalPaid = monthBills.reduce((s,b)=>s+(b.alreadyPaid||0),0);
         let totalDue = monthBills.reduce((s,b)=>s+(b.due||0),0);
@@ -214,19 +217,19 @@
         let cards = document.getElementById('dashboardCards');
         if(cards) cards.innerHTML = `
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-blue-500"><div class="text-xs">Monthly Bills</div><div class="text-xl font-bold">Rs. ${numberFormat(totalBill)}</div><small>Due: ${numberFormat(totalDue)}</small></div>
-            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-purple-500"><div class="text-xs">Invoices (Sep.)</div><div class="text-xl font-bold">Rs. ${numberFormat(invTotal)}</div><small>Due: ${numberFormat(invDue)}</small></div>
+            <div class="bg-white p-3 rounded-xl shadow border-l-4 border-purple-500"><div class="text-xs">Invoices (Real)</div><div class="text-xl font-bold">Rs. ${numberFormat(invTotal)}</div><small>Due: ${numberFormat(invDue)}</small></div>
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-green-500"><div class="text-xs">Collected</div><div class="text-xl font-bold text-green-600">Rs. ${numberFormat(totalPaid+invPaid)}</div></div>
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-red-500"><div class="text-xs">Total Due</div><div class="text-xl font-bold text-red-600">Rs. ${numberFormat(totalDue+invDue)}</div></div>
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-orange-500"><div class="text-xs">Bills Unpaid</div><div class="text-xl">${monthBills.filter(b=>getBillStatus(b)==='unpaid').length}</div></div>
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-indigo-500"><div class="text-xs">Invoices Unpaid</div><div class="text-xl">${monthInvoices.filter(i=>getInvoiceStatus(i)==='unpaid').length}</div></div>`;
     }
     
-    // Sync from Firebase (fetch clients, finance, invoices separately)
+    // Sync from Firebase - separate monthly bills from real invoices
     async function syncFromFirebase() {
         const alertDiv = document.getElementById('syncAlert');
         alertDiv.className = 'mb-4 p-3 rounded-xl sync-loading';
         alertDiv.innerHTML = '<div class="spinner"></div> Connecting to Firebase...';
-        if(!isFirebaseConnected && !window.initFirebaseOnce()) { alertDiv.innerHTML = 'Firebase connection failed.'; return; }
+        if(!isFirebaseConnected && !initFirebaseOnce()) { alertDiv.innerHTML = 'Firebase connection failed.'; return; }
         
         alertDiv.innerHTML = '<div class="spinner"></div> Fetching clients...';
         try {
@@ -237,11 +240,16 @@
             financeData = financeSnap.docs.map(d=> ({ id: d.id, ...d.data() }));
             alertDiv.innerHTML = '<div class="spinner"></div> Fetching invoices from main app...';
             const invSnap = await db.collection('invoices').get();
-            firebaseInvoices = invSnap.docs.map(d=> ({ id: d.id, ...d.data() }));
+            const rawInvoices = invSnap.docs.map(d=> ({ id: d.id, ...d.data() }));
             
-            // Process invoices: store separately (do NOT merge into monthly bills)
-            let newInvoices = [];
-            for(let inv of firebaseInvoices) {
+            // Separate: real invoices are those where work is NOT "Monthly Bill", "Monthly Fee", "Monthly"
+            const realInvoicesList = [];
+            for(let inv of rawInvoices) {
+                const work = (inv.work || inv.invoice_type || '').toLowerCase();
+                // Exclude monthly bills
+                if(work.includes('monthly bill') || work.includes('monthly fee') || work === 'monthly') {
+                    continue; // skip - these are monthly bills, not real invoices
+                }
                 if(!inv.cust && !inv.clientName && !inv.phone) continue;
                 let client = clientsData.find(c => c.id===inv.clientId || c.mobile===inv.phone || c.name===inv.cust);
                 let invoice = {
@@ -258,7 +266,6 @@
                     discount: Number(inv.discount) || 0,
                     received: Number(inv.received) || 0,
                     payments: [],
-                    status: getInvoiceStatus({total:Number(inv.total)||0, received:Number(inv.received)||0}),
                     note: inv.note || ''
                 };
                 // find payments from finance for this invoice
@@ -266,15 +273,15 @@
                 invoice.payments = payments.map(p => ({ amount: p.amount, method: p.mode, date: p.date, timestamp: p.time }));
                 invoice.received = payments.reduce((s,p)=>s+(p.amount||0),0);
                 invoice.status = getInvoiceStatus(invoice);
-                newInvoices.push(invoice);
+                realInvoicesList.push(invoice);
             }
-            // merge with existing invoices (keep existing if not overwritten)
-            let existingMap = new Map(invoices.map(i=>[i.invoiceId, i]));
-            for(let inv of newInvoices) {
+            // merge with existing (keep existing if not overwritten)
+            let existingMap = new Map(realInvoices.map(i=>[i.invoiceId, i]));
+            for(let inv of realInvoicesList) {
                 existingMap.set(inv.invoiceId, inv);
             }
-            invoices = Array.from(existingMap.values());
-            nextInvoiceId = Math.max(...invoices.map(i=>i.id),0)+1;
+            realInvoices = Array.from(existingMap.values());
+            nextInvoiceId = Math.max(...realInvoices.map(i=>i.id),0)+1;
             
             // Process monthly bills: from client monthly fee (not from invoices)
             let month = billFilters.month;
@@ -313,7 +320,7 @@
             updateDashboard();
             updateBillFiltersUI();
             updateInvoiceFiltersUI();
-            alertDiv.innerHTML = `<i class="fas fa-check-circle"></i> Sync complete. Bills: ${monthlyBills.length}, Invoices: ${invoices.length}`;
+            alertDiv.innerHTML = `<i class="fas fa-check-circle"></i> Sync complete. Monthly Bills: ${monthlyBills.length}, Real Invoices: ${realInvoices.length}`;
             alertDiv.className = 'mb-4 p-3 rounded-xl sync-success';
             setTimeout(()=>alertDiv.classList.add('hidden'), 4000);
         } catch(e) {
@@ -365,7 +372,7 @@
         let pageRows = filtered.slice(start, start+PAGE_SIZE);
         let tbody = document.getElementById('billsTbody');
         if(!tbody) return;
-        if(pageRows.length===0) { tbody.innerHTML='<tr><td colspan="11" class="text-center py-8">No bills</td></tr>'; document.getElementById('billsPagination').innerHTML=''; return; }
+        if(pageRows.length===0) { tbody.innerHTML='<tr><td colspan="12" class="text-center py-8">No bills</td></tr>'; document.getElementById('billsPagination').innerHTML=''; return; }
         tbody.innerHTML = pageRows.map(b => {
             let status = getBillStatus(b);
             let statusText = status==='paid'?'Paid':status==='partial'?'Partial':'Unpaid';
@@ -382,12 +389,12 @@
                 <td class="px-3 py-2 text-right">Rs. ${numberFormat(b.alreadyPaid)}</td>
                 <td class="px-3 py-2 text-right font-bold text-red-600">Rs. ${numberFormat(b.due)}</td>
                 <td class="px-3 py-2"><span class="px-2 py-1 rounded-full text-xs ${statusColor}">${statusText}</span></td>
-                <td class="px-3 py-2 text-center">
-                    <i class="fas fa-print text-blue-600 print-bill cursor-pointer mx-1" data-id="${b.id}"></i>
-                    <i class="fab fa-whatsapp text-green-600 whatsapp-bill cursor-pointer mx-1" data-id="${b.id}"></i>
-                    <i class="fas fa-edit text-amber-600 edit-bill cursor-pointer mx-1" data-id="${b.id}"></i>
-                    <i class="fas fa-trash-alt text-red-500 delete-bill cursor-pointer mx-1" data-id="${b.id}"></i>
-                    <i class="fas fa-money-bill-wave text-green-600 receive-bill cursor-pointer mx-1" data-id="${b.id}"></i>
+                <td class="px-3 py-2 text-center action-icons">
+                    <i class="fas fa-print text-blue-600 print-bill" data-id="${b.id}" title="Print"></i>
+                    <i class="fab fa-whatsapp text-green-600 whatsapp-bill" data-id="${b.id}" title="WhatsApp"></i>
+                    <i class="fas fa-edit text-amber-600 edit-bill" data-id="${b.id}" title="Edit"></i>
+                    <i class="fas fa-trash-alt text-red-500 delete-bill" data-id="${b.id}" title="Delete"></i>
+                    <i class="fas fa-money-bill-wave text-green-600 receive-bill" data-id="${b.id}" title="Receive Payment"></i>
                 </td>
             </tr>`;
         }).join('');
@@ -406,6 +413,10 @@
             document.querySelectorAll('.page-bill').forEach(btn=>btn.addEventListener('click',()=>{ currentBillPage=parseInt(btn.dataset.page); renderBillsTable(); }));
         }
         // attach actions
+        attachBillActions();
+    }
+    
+    function attachBillActions() {
         document.querySelectorAll('.print-bill').forEach(el=>el.addEventListener('click',()=>printBill(parseInt(el.dataset.id))));
         document.querySelectorAll('.whatsapp-bill').forEach(el=>el.addEventListener('click',()=>whatsappBill(parseInt(el.dataset.id))));
         document.querySelectorAll('.edit-bill').forEach(el=>el.addEventListener('click',()=>openEditBillModal(parseInt(el.dataset.id))));
@@ -414,25 +425,25 @@
         document.querySelectorAll('.bill-check').forEach(cb=>cb.addEventListener('change',updateSelectAllBills));
     }
     
-    // Render invoices table
+    // Render invoices table (only real invoices)
     function renderInvoicesTable() {
-        let filtered = invoices.filter(i => i.month === invFilters.month);
+        let filtered = realInvoices.filter(i => i.month === invFilters.month);
         if(invFilters.search) {
             let s = invFilters.search.toLowerCase();
-            filtered = filtered.filter(i => i.clientName.toLowerCase().includes(s) || i.mobile.includes(s) || i.invoiceId.toLowerCase().includes(s));
+            filtered = filtered.filter(i => i.clientName.toLowerCase().includes(s) || i.mobile.includes(s) || i.invoiceId.toLowerCase().includes(s) || i.work.toLowerCase().includes(s));
         }
-        if(invFilters.status !== 'all') filtered = filtered.filter(i => i.status === invFilters.status);
+        if(invFilters.status !== 'all') filtered = filtered.filter(i => getInvoiceStatus(i) === invFilters.status);
         let totalRows = filtered.length;
         let start = (currentInvoicePage-1)*PAGE_SIZE;
         let pageRows = filtered.slice(start, start+PAGE_SIZE);
         let tbody = document.getElementById('invoicesTbody');
         if(!tbody) return;
-        if(pageRows.length===0) { tbody.innerHTML='<tr><td colspan="10" class="text-center py-8">No invoices</td></tr>'; document.getElementById('invoicesPagination').innerHTML=''; return; }
+        if(pageRows.length===0) { tbody.innerHTML='<tr><td colspan="11" class="text-center py-8">No real invoices found (monthly bills excluded)</td></tr>'; document.getElementById('invoicesPagination').innerHTML=''; return; }
         tbody.innerHTML = pageRows.map(inv => {
             let due = (inv.total||0) - (inv.received||0);
             let statusText = due<=0?'Paid':inv.received>0?'Partial':'Unpaid';
             let statusColor = due<=0?'bg-green-100':inv.received>0?'bg-yellow-100':'bg-red-100';
-            return `<tr class="border-b hover:bg-gray-50 invoice-row">
+            return `<tr class="border-b hover:bg-gray-50">
                 <td class="px-3 py-2"><input type="checkbox" class="inv-check" data-id="${inv.id}"></td>
                 <td class="px-3 py-2 font-mono text-sm">${escapeHtml(inv.invoiceId)}</td>
                 <td class="px-3 py-2">${escapeHtml(inv.clientName)}</td>
@@ -443,12 +454,12 @@
                 <td class="px-3 py-2 text-right">Rs. ${numberFormat(inv.received)}</td>
                 <td class="px-3 py-2 text-right font-bold text-red-600">Rs. ${numberFormat(due)}</td>
                 <td class="px-3 py-2"><span class="px-2 py-1 rounded-full text-xs ${statusColor}">${statusText}</span></td>
-                <td class="px-3 py-2 text-center">
-                    <i class="fas fa-print text-blue-600 print-inv cursor-pointer mx-1" data-id="${inv.id}"></i>
-                    <i class="fab fa-whatsapp text-green-600 whatsapp-inv cursor-pointer mx-1" data-id="${inv.id}"></i>
-                    <i class="fas fa-edit text-amber-600 edit-inv cursor-pointer mx-1" data-id="${inv.id}"></i>
-                    <i class="fas fa-trash-alt text-red-500 delete-inv cursor-pointer mx-1" data-id="${inv.id}"></i>
-                    <i class="fas fa-money-bill-wave text-green-600 receive-inv cursor-pointer mx-1" data-id="${inv.id}"></i>
+                <td class="px-3 py-2 text-center action-icons">
+                    <i class="fas fa-print text-blue-600 print-inv" data-id="${inv.id}" title="Print Invoice"></i>
+                    <i class="fab fa-whatsapp text-green-600 whatsapp-inv" data-id="${inv.id}" title="WhatsApp"></i>
+                    <i class="fas fa-edit text-amber-600 edit-inv" data-id="${inv.id}" title="Edit"></i>
+                    <i class="fas fa-trash-alt text-red-500 delete-inv" data-id="${inv.id}" title="Delete"></i>
+                    <i class="fas fa-money-bill-wave text-green-600 receive-inv" data-id="${inv.id}" title="Receive Payment"></i>
                 </td>
             </tr>`;
         }).join('');
@@ -465,11 +476,14 @@
             pagDiv.innerHTML = html;
             document.querySelectorAll('.page-inv').forEach(btn=>btn.addEventListener('click',()=>{ currentInvoicePage=parseInt(btn.dataset.page); renderInvoicesTable(); }));
         }
-        // attach actions
+        attachInvoiceActions();
+    }
+    
+    function attachInvoiceActions() {
         document.querySelectorAll('.print-inv').forEach(el=>el.addEventListener('click',()=>printInvoice(parseInt(el.dataset.id))));
         document.querySelectorAll('.whatsapp-inv').forEach(el=>el.addEventListener('click',()=>whatsappInvoice(parseInt(el.dataset.id))));
         document.querySelectorAll('.edit-inv').forEach(el=>el.addEventListener('click',()=>openEditInvoiceModal(parseInt(el.dataset.id))));
-        document.querySelectorAll('.delete-inv').forEach(el=>el.addEventListener('click',()=>{ if(confirm('Delete invoice?')){ invoices=invoices.filter(i=>i.id!==parseInt(el.dataset.id)); saveLocal(); renderInvoicesTable(); updateDashboard(); } }));
+        document.querySelectorAll('.delete-inv').forEach(el=>el.addEventListener('click',()=>{ if(confirm('Delete invoice?')){ realInvoices=realInvoices.filter(i=>i.id!==parseInt(el.dataset.id)); saveLocal(); renderInvoicesTable(); updateDashboard(); } }));
         document.querySelectorAll('.receive-inv').forEach(el=>el.addEventListener('click',()=>openReceiveInvoiceModal(parseInt(el.dataset.id))));
         document.querySelectorAll('.inv-check').forEach(cb=>cb.addEventListener('change',updateSelectAllInvoices));
     }
@@ -492,7 +506,7 @@
     function updateInvoiceFiltersUI() {
         let statsDiv = document.getElementById('invStats');
         if(statsDiv) {
-            let monthInvs = invoices.filter(i=>i.month===invFilters.month);
+            let monthInvs = realInvoices.filter(i=>i.month===invFilters.month);
             let totalDue = monthInvs.reduce((s,i)=>s+((i.total||0)-(i.received||0)),0);
             statsDiv.innerHTML = `Month: ${invFilters.month} | Invoices: ${monthInvs.length} | Due: Rs. ${numberFormat(totalDue)}`;
         }
@@ -534,7 +548,7 @@
     
     function whatsappBill(id) {
         let bill = monthlyBills.find(b=>b.id===id);
-        if(!bill) return;
+        if(!bill || !bill.mobile) return;
         let phone = formatMobileForWA(bill.mobile);
         let msg = `*Fire.net.pk Monthly Bill*\nBill No: ${bill.billNo}\nMonth: ${bill.month}\nDue Date: ${bill.dueDate}\nAmount Due: Rs. ${numberFormat(bill.due)}\nStatus: ${bill.due===0?'Paid':bill.alreadyPaid>0?'Partial':'Unpaid'}\nPlease pay before due date.`;
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,'_blank');
@@ -544,18 +558,19 @@
         let bill = monthlyBills.find(b=>b.id===id);
         if(!bill) return;
         let html = `<div class="space-y-3">
-            <div class="grid grid-cols-2 gap-2"><div><label>Customer</label><input id="eName" value="${escapeHtml(bill.clientName)}" class="border rounded p-2"></div>
-            <div><label>Mobile</label><input id="eMobile" value="${escapeHtml(bill.mobile)}" class="border rounded p-2"></div>
-            <div><label>Client Code</label><input id="eCode" value="${escapeHtml(bill.clientCode)}" class="border rounded p-2"></div>
-            <div><label>Package</label><input id="ePkg" value="${escapeHtml(bill.package)}" class="border rounded p-2"></div>
-            <div><label>Area</label><input id="eArea" value="${escapeHtml(bill.area)}" class="border rounded p-2"></div>
-            <div><label>User ID</label><input id="eUser" value="${escapeHtml(bill.userId)}" class="border rounded p-2"></div>
-            <div><label>Month</label><input id="eMonth" value="${bill.month}" class="border rounded p-2"></div>
-            <div><label>Due Date</label><input id="eDue" value="${bill.dueDate}" class="border rounded p-2"></div>
-            <div><label>Bill Amount</label><input id="eAmount" type="number" value="${bill.amount}" class="border rounded p-2"></div>
-            <div><label>Discount</label><input id="eDiscount" type="number" value="${bill.discount}" class="border rounded p-2"></div>
-            <div><label>Received Amount</label><input id="eReceived" type="number" value="${bill.alreadyPaid}" class="border rounded p-2 editable-field"></div>
-            <div><label>Payment Method (new)</label><select id="eMethod" class="border rounded p-2"><option>Cash</option><option>Bank</option><option>JazzCash</option><option>Easypaisa</option></select></div>
+            <div class="grid grid-cols-2 gap-2">
+                <div><label>Customer</label><input id="eName" value="${escapeHtml(bill.clientName)}" class="border rounded p-2"></div>
+                <div><label>Mobile</label><input id="eMobile" value="${escapeHtml(bill.mobile)}" class="border rounded p-2"></div>
+                <div><label>Client Code</label><input id="eCode" value="${escapeHtml(bill.clientCode)}" class="border rounded p-2"></div>
+                <div><label>Package</label><input id="ePkg" value="${escapeHtml(bill.package)}" class="border rounded p-2"></div>
+                <div><label>Area</label><input id="eArea" value="${escapeHtml(bill.area)}" class="border rounded p-2"></div>
+                <div><label>User ID</label><input id="eUser" value="${escapeHtml(bill.userId)}" class="border rounded p-2"></div>
+                <div><label>Month</label><input id="eMonth" value="${bill.month}" class="border rounded p-2"></div>
+                <div><label>Due Date</label><input id="eDue" value="${bill.dueDate}" class="border rounded p-2"></div>
+                <div><label>Bill Amount</label><input id="eAmount" type="number" value="${bill.amount}" class="border rounded p-2"></div>
+                <div><label>Discount</label><input id="eDiscount" type="number" value="${bill.discount}" class="border rounded p-2"></div>
+                <div><label>Received Amount</label><input id="eReceived" type="number" value="${bill.alreadyPaid}" class="border rounded p-2 editable-field"></div>
+                <div><label>Payment Method (new)</label><select id="eMethod" class="border rounded p-2"><option>Cash</option><option>Bank</option><option>JazzCash</option><option>Easypaisa</option></select></div>
             </div>
             <button id="saveBillEdit" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Save Changes</button>
         </div>`;
@@ -599,7 +614,8 @@
     function openReceiveBillModal(id) {
         let bill = monthlyBills.find(b=>b.id===id);
         if(!bill) return;
-        let html = `<div class="space-y-3"><div><b>${escapeHtml(bill.clientName)}</b> - Due: Rs. ${bill.due}</div>
+        let html = `<div class="space-y-3">
+            <div><b>${escapeHtml(bill.clientName)}</b> - Due: Rs. ${bill.due}</div>
             <div><label>Amount to Receive</label><input id="recAmount" type="number" value="${bill.due}" class="border rounded p-2 w-full"></div>
             <div><label>Payment Method</label><select id="recMethod" class="border rounded p-2 w-full"><option>Cash</option><option>Bank</option><option>JazzCash</option><option>Easypaisa</option></select></div>
             <button id="saveReceive" class="bg-green-600 text-white px-4 py-2 rounded w-full">Record Payment</button>
@@ -622,7 +638,7 @@
     
     // Invoice actions
     async function printInvoice(id) {
-        let inv = invoices.find(i=>i.id===id);
+        let inv = realInvoices.find(i=>i.id===id);
         if(!inv) return;
         let qr = await generateInvoiceQR(inv);
         let html = `<div class="print-area"><div class="page" style="max-width:190mm;margin:0 auto;">
@@ -643,8 +659,8 @@
     }
     
     function whatsappInvoice(id) {
-        let inv = invoices.find(i=>i.id===id);
-        if(!inv) return;
+        let inv = realInvoices.find(i=>i.id===id);
+        if(!inv || !inv.mobile) return;
         let phone = formatMobileForWA(inv.mobile);
         let due = (inv.total||0)-(inv.received||0);
         let msg = `*Fire.net.pk Invoice*\nInvoice ID: ${inv.invoiceId}\nWork: ${inv.work}\nTotal: Rs. ${numberFormat(inv.total)}\nReceived: Rs. ${numberFormat(inv.received)}\nDue: Rs. ${numberFormat(due)}\nPlease pay before due date.`;
@@ -652,17 +668,18 @@
     }
     
     function openEditInvoiceModal(id) {
-        let inv = invoices.find(i=>i.id===id);
+        let inv = realInvoices.find(i=>i.id===id);
         if(!inv) return;
-        let html = `<div class="space-y-3"><div class="grid grid-cols-2 gap-2">
-            <div><label>Client Name</label><input id="invName" value="${escapeHtml(inv.clientName)}" class="border rounded p-2"></div>
-            <div><label>Mobile</label><input id="invMobile" value="${escapeHtml(inv.mobile)}" class="border rounded p-2"></div>
-            <div><label>Work / Service</label><input id="invWork" value="${escapeHtml(inv.work)}" class="border rounded p-2"></div>
-            <div><label>Month</label><input id="invMonth" value="${inv.month}" class="border rounded p-2"></div>
-            <div><label>Total Amount</label><input id="invTotal" type="number" value="${inv.total}" class="border rounded p-2"></div>
-            <div><label>Discount</label><input id="invDiscount" type="number" value="${inv.discount}" class="border rounded p-2"></div>
-            <div><label>Received Already</label><input id="invReceived" type="number" value="${inv.received}" class="border rounded p-2 editable-field"></div>
-            <div><label>Payment Method (new)</label><select id="invMethod" class="border rounded p-2"><option>Cash</option><option>Bank</option><option>JazzCash</option><option>Easypaisa</option></select></div>
+        let html = `<div class="space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+                <div><label>Client Name</label><input id="invName" value="${escapeHtml(inv.clientName)}" class="border rounded p-2"></div>
+                <div><label>Mobile</label><input id="invMobile" value="${escapeHtml(inv.mobile)}" class="border rounded p-2"></div>
+                <div><label>Work / Service</label><input id="invWork" value="${escapeHtml(inv.work)}" class="border rounded p-2"></div>
+                <div><label>Month</label><input id="invMonth" value="${inv.month}" class="border rounded p-2"></div>
+                <div><label>Total Amount</label><input id="invTotal" type="number" value="${inv.total}" class="border rounded p-2"></div>
+                <div><label>Discount</label><input id="invDiscount" type="number" value="${inv.discount}" class="border rounded p-2"></div>
+                <div><label>Received Already</label><input id="invReceived" type="number" value="${inv.received}" class="border rounded p-2 editable-field"></div>
+                <div><label>Payment Method (new)</label><select id="invMethod" class="border rounded p-2"><option>Cash</option><option>Bank</option><option>JazzCash</option><option>Easypaisa</option></select></div>
             </div>
             <button id="saveInvEdit" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Save Invoice</button>
         </div>`;
@@ -691,7 +708,6 @@
             inv.total = parseFloat(document.getElementById('invTotal').value) || 0;
             inv.discount = parseFloat(document.getElementById('invDiscount').value) || 0;
             inv.received = inv.payments.reduce((s,p)=>s+p.amount,0);
-            inv.status = getInvoiceStatus(inv);
             saveLocal();
             renderInvoicesTable();
             updateDashboard();
@@ -701,13 +717,15 @@
     }
     
     function openReceiveInvoiceModal(id) {
-        let inv = invoices.find(i=>i.id===id);
+        let inv = realInvoices.find(i=>i.id===id);
         if(!inv) return;
         let due = (inv.total||0) - (inv.received||0);
-        let html = `<div><b>${escapeHtml(inv.clientName)}</b> - Invoice Due: Rs. ${due}</div>
+        let html = `<div>
+            <div><b>${escapeHtml(inv.clientName)}</b> - Invoice Due: Rs. ${due}</div>
             <div><label>Amount</label><input id="recInvAmt" type="number" value="${due}" class="border rounded p-2 w-full"></div>
             <div><label>Method</label><select id="recInvMethod" class="border rounded p-2 w-full"><option>Cash</option><option>Bank</option><option>JazzCash</option><option>Easypaisa</option></select></div>
-            <button id="saveRecInv" class="bg-green-600 text-white px-4 py-2 rounded w-full">Record</button>`;
+            <button id="saveRecInv" class="bg-green-600 text-white px-4 py-2 rounded w-full">Record</button>
+        </div>`;
         document.getElementById('modalTitle').innerText = 'Receive Invoice Payment';
         document.getElementById('modalBody').innerHTML = html;
         document.getElementById('genericModal').classList.add('active');
@@ -716,7 +734,6 @@
             if(amt<=0) return;
             inv.payments.push({ amount: amt, method: document.getElementById('recInvMethod').value, date: today(), timestamp: getCurrentTimestamp() });
             inv.received = inv.payments.reduce((s,p)=>s+p.amount,0);
-            inv.status = getInvoiceStatus(inv);
             saveLocal();
             renderInvoicesTable();
             updateDashboard();
@@ -729,7 +746,6 @@
     function updateSelectAllInvoices() { let all=document.querySelectorAll('.inv-check'); let checked=document.querySelectorAll('.inv-check:checked'); let header=document.getElementById('selectAllInvoices'); if(header) header.checked = all.length>0 && all.length===checked.length; }
     
     function getSelectedBillIds() { return [...document.querySelectorAll('.bill-check:checked')].map(cb=>parseInt(cb.dataset.id)); }
-    function getSelectedInvoiceIds() { return [...document.querySelectorAll('.inv-check:checked')].map(cb=>parseInt(cb.dataset.id)); }
     
     async function bulkPrintBills() { let ids = getSelectedBillIds(); if(!ids.length) alert("Select bills"); else for(let id of ids) await printBill(id); }
     async function sendWhatsAppSelected() {
@@ -742,21 +758,20 @@
     
     function addManualBill() {
         let newBill = { id: nextBillId++, clientCode: '', clientName: '', mobile: '', package: '', area: '', userId: '', month: billFilters.month, issueDate: today(), dueDate: `${billFilters.month}-10`, amount: 0, discount: 0, payments: [], alreadyPaid: 0, due: 0 };
-        openEditBillModal(newBill.id);
         monthlyBills.push(newBill);
         renderBillsTable();
+        openEditBillModal(newBill.id);
     }
     
     function addManualInvoice() {
-        let newInv = { id: nextInvoiceId++, invoiceId: `INV-${Date.now()}`, clientName: '', mobile: '', clientCode: '', work: 'Service', month: invFilters.month, date: today(), dueDate: '', total: 0, discount: 0, received: 0, payments: [], status: 'unpaid' };
-        invoices.push(newInv);
+        let newInv = { id: nextInvoiceId++, invoiceId: `INV-${Date.now()}`, clientName: '', mobile: '', clientCode: '', work: 'Service', month: invFilters.month, date: today(), dueDate: '', total: 0, discount: 0, received: 0, payments: [] };
+        realInvoices.push(newInv);
         renderInvoicesTable();
         openEditInvoiceModal(newInv.id);
     }
     
-    // CSV export
     function exportBillsCSV() { let data = monthlyBills.map(b=>({ Code:b.clientCode, Name:b.clientName, Mobile:b.mobile, Package:b.package, Area:b.area, Month:b.month, Bill:b.amount, Paid:b.alreadyPaid, Due:b.due, Status:getBillStatus(b) })); let csv = Papa.unparse(data); let blob = new Blob([csv],{type:"text/csv"}); let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`monthly_bills_${billFilters.month}.csv`; a.click(); }
-    function exportInvoicesCSV() { let data = invoices.map(i=>({ InvoiceID:i.invoiceId, Client:i.clientName, Mobile:i.mobile, Work:i.work, Month:i.month, Total:i.total, Received:i.received, Due:(i.total-i.received), Status:i.status })); let csv = Papa.unparse(data); let blob = new Blob([csv],{type:"text/csv"}); let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`invoices_${invFilters.month}.csv`; a.click(); }
+    function exportInvoicesCSV() { let data = realInvoices.map(i=>({ InvoiceID:i.invoiceId, Client:i.clientName, Mobile:i.mobile, Work:i.work, Month:i.month, Total:i.total, Received:i.received, Due:(i.total-i.received), Status:getInvoiceStatus(i) })); let csv = Papa.unparse(data); let blob = new Blob([csv],{type:"text/csv"}); let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`invoices_${invFilters.month}.csv`; a.click(); }
     
     function initFirebaseOnce() {
         if(db) return true;
