@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Fire.net.pk - Bill Printer with Editable Paid Amount</title>
+    <title>Fire.net.pk - Complete Billing Suite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -22,18 +22,13 @@
         @page { size: A4; margin: 14mm; }
         .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 50; }
         .modal-bg.active { display: flex; }
-        .modal { background: white; border-radius: 20px; max-width: 750px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 20px; }
+        .modal { background: white; border-radius: 20px; max-width: 850px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 20px; }
         .filter-active { background-color: #dc2626 !important; color: white !important; border-color: #dc2626 !important; }
         .sync-success { background-color: #dcfce7; border: 1px solid #16a34a; }
         .sync-warning { background-color: #fef3c7; border: 1px solid #d97706; }
-        .sync-loading { background-color: #dbeafe; border: 1px solid #2563eb; }
-        .spinner { border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block; margin-right: 8px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .btn-wa { background-color: #25D366; color: white; }
-        .btn-wa:hover { background-color: #128C7E; }
-        .payment-row { background: #f8fafc; border-radius: 8px; padding: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .total-received-box { background: #dcfce7; border-radius: 10px; padding: 10px; margin: 10px 0; text-align: center; }
-        .editable-paid { background: #fff3cd; border: 1px solid #ffc107; }
+        .tab-active { background-color: #dc2626 !important; color: white !important; }
+        .invoice-item-row { background: #fffbeb; border-left: 3px solid #f59e0b; margin-bottom: 5px; padding: 8px; border-radius: 8px; }
+        .editable-paid-field { background: #fff3cd; border: 2px solid #ffc107; font-size: 18px; font-weight: bold; text-align: center; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -42,7 +37,7 @@
     <div class="flex flex-wrap justify-between items-center mb-6 border-b pb-4">
         <div>
             <h1 class="text-3xl font-bold text-red-700"><i class="fas fa-file-invoice-dollar mr-2"></i>Fire.net.pk Bill Printer</h1>
-            <p class="text-gray-500">Edit Paid Amount | Payment History | Main App QR | WhatsApp</p>
+            <p class="text-gray-500">Invoices Tab | Edit Paid Amount Directly | Firebase Sync</p>
         </div>
         <div class="flex gap-2">
             <button id="downloadTemplateBtn" class="bg-gray-700 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm"><i class="fas fa-download"></i> CSV Template</button>
@@ -64,53 +59,38 @@
         <button id="selectAllBtn" class="border border-gray-400 bg-white px-4 py-2 rounded-xl shadow text-sm"><i class="fas fa-check-square"></i> Select All</button>
     </div>
 
-    <div class="flex flex-wrap gap-3 mb-4 items-center bg-white p-3 rounded-xl shadow">
-        <div><span class="font-bold">Search:</span></div>
-        <input type="text" id="searchInput" placeholder="Name, Mobile, Code..." class="border rounded-lg px-3 py-1.5 w-64 text-sm">
-        <div class="h-6 w-px bg-gray-300 mx-1"></div>
-        <div><span class="font-bold">Status:</span></div>
-        <button data-filter="all" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">All</button>
-        <button data-filter="paid" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">Paid</button>
-        <button data-filter="unpaid" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">Unpaid</button>
-        <button data-filter="partial" class="filter-btn px-3 py-1 rounded-lg border bg-white text-sm">Partial</button>
-        <div class="h-6 w-px bg-gray-300 mx-1"></div>
-        <div><span class="font-bold">Area:</span></div>
-        <select id="areaFilter" class="border rounded-lg px-2 py-1 text-sm bg-white"><option value="">All Areas</option></select>
-        <div><span class="font-bold">Package:</span></div>
-        <select id="packageFilter" class="border rounded-lg px-2 py-1 text-sm bg-white"><option value="">All Packages</option></select>
-        <div><span class="font-bold">Month:</span></div>
-        <input type="month" id="monthFilter" class="border rounded-lg px-2 py-1 text-sm">
-        <div class="flex-1 text-right text-sm text-gray-500" id="filterStats"></div>
+    <!-- Tab Navigation -->
+    <div class="flex gap-2 mb-4 border-b">
+        <button id="tabBills" class="tab-btn px-5 py-2 rounded-t-lg font-bold bg-red-600 text-white">📋 Monthly Bills</button>
+        <button id="tabInvoices" class="tab-btn px-5 py-2 rounded-t-lg font-bold bg-gray-200 text-gray-700">📄 Invoices (Monthly Breakdown)</button>
     </div>
 
-    <div class="bg-white rounded-2xl shadow overflow-hidden">
+    <!-- Bills Table -->
+    <div id="billsPanel" class="bg-white rounded-2xl shadow overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full">
-                <thead>
-                    <tr class="bg-gray-50 border-b">
-                        <th class="w-8 px-3 py-3"><input type="checkbox" id="selectAllHeader" class="rounded"></th>
-                        <th class="px-3 py-3 text-left text-xs font-medium">Code</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium">Customer</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium">Mobile</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium">Package</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium">Area</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium">Bill Month</th>
-                        <th class="px-3 py-3 text-right text-xs font-medium">Bill</th>
-                        <th class="px-3 py-3 text-right text-xs font-medium">Paid</th>
-                        <th class="px-3 py-3 text-right text-xs font-medium">Due</th>
-                        <th class="px-3 py-3 text-left text-xs font-medium">Status</th>
-                        <th class="px-3 py-3 text-center text-xs font-medium">Actions</th>
-                    </tr>
-                </thead>
+                <thead><tr><th class="w-8 px-3 py-3"><input type="checkbox" id="selectAllHeader" class="rounded"></th>
+                    <th class="px-3 py-3">Code</th><th>Customer</th><th>Mobile</th><th>Package</th><th>Area</th>
+                    <th>Bill Month</th><th class="text-right">Bill</th><th class="text-right">Paid</th><th class="text-right">Due</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody id="billsTbody"></tbody>
             </table>
         </div>
-        <div id="noBillsMsg" class="text-center py-8 text-gray-400 hidden">No bills found. Click "Sync from Firebase" to load data.</div>
+        <div id="noBillsMsg" class="text-center py-8 text-gray-400 hidden">No bills found. Sync from Firebase.</div>
         <div id="paginationControls" class="flex justify-between items-center px-4 py-3 border-t bg-gray-50 no-print"></div>
+    </div>
+
+    <!-- Invoices Panel -->
+    <div id="invoicesPanel" class="bg-white rounded-2xl shadow overflow-hidden hidden">
+        <div class="p-4 border-b bg-gray-50">
+            <h2 class="font-bold text-lg"><i class="fas fa-receipt text-amber-600"></i> All Invoices for Current Month</h2>
+            <p class="text-sm text-gray-500">These invoices are automatically added to monthly bills with breakdown</p>
+        </div>
+        <div id="invoicesListContainer" class="p-4"></div>
     </div>
 </div>
 
-<div id="billModal" class="modal-bg"><div class="modal"><div class="flex justify-between border-b pb-2 mb-3"><h2 class="text-xl font-bold" id="modalTitle">Bill</h2><button id="closeModalBtn" class="text-gray-500 text-2xl">&times;</button></div><div id="modalBody"></div></div></div>
+<!-- Edit Bill Modal -->
+<div id="billModal" class="modal-bg"><div class="modal"><div class="flex justify-between border-b pb-2 mb-3"><h2 class="text-xl font-bold" id="modalTitle">Edit Bill</h2><button id="closeModalBtn" class="text-gray-500 text-2xl">&times;</button></div><div id="modalBody"></div></div></div>
 
 <script>
     // Firebase Config
@@ -141,18 +121,7 @@
     
     function generateReceiptId() {
         let d = new Date();
-        let y = d.getFullYear();
-        let m = String(d.getMonth() + 1).padStart(2, '0');
-        let da = String(d.getDate()).padStart(2, '0');
-        let h = String(d.getHours()).padStart(2, '0');
-        let mi = String(d.getMinutes()).padStart(2, '0');
-        let rand = Math.floor(Math.random() * 9000) + 1000;
-        return `FRN-${y}${m}${da}-${h}${mi}-${rand}`;
-    }
-    
-    function getVerifyUrl(receiptId) {
-        let base = window.location.href.split('?')[0].replace(/\/+$/, '');
-        return `${base}?verify=${encodeURIComponent(receiptId)}`;
+        return `FRN-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}-${Math.floor(Math.random()*9000)+1000}`;
     }
     
     function recalcBill(b) { 
@@ -162,7 +131,6 @@
         b.netDue = net > 0 ? net : 0; 
         if(!b.billNo) b.billNo = `MB-${(b.billMonth||'').replace('-','')}-${b.clientCode||'000'}`;
         if(!b.receiptId) b.receiptId = generateReceiptId();
-        if(!b.verifyUrl) b.verifyUrl = getVerifyUrl(b.receiptId);
         return b; 
     }
     
@@ -170,15 +138,8 @@
     function saveLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify({bills, nextId})); }
     function loadLocal() {
         let stored = localStorage.getItem(STORAGE_KEY);
-        if(stored) {
-            let data = JSON.parse(stored);
-            bills = data.bills || [];
-            nextId = data.nextId || Math.max(0, ...bills.map(b=>b.id), 0) + 1;
-            recalcAll();
-        } else {
-            bills = [];
-            nextId = 1;
-        }
+        if(stored) { let data = JSON.parse(stored); bills = data.bills || []; nextId = data.nextId || 1; recalcAll(); }
+        else { bills = []; nextId = 1; }
     }
     
     function getBillStatus(b) { 
@@ -190,59 +151,6 @@
     function numberFormat(n){ return (Number(n)||0).toLocaleString(); }
     function today(){ return new Date().toISOString().slice(0,10); }
     
-    function formatWhatsAppNumber(mobile) {
-        let phone = String(mobile || '').replace(/\D/g, '');
-        if (phone.startsWith('0') && phone.length === 11) return '92' + phone.slice(1);
-        if (phone.startsWith('92') && phone.length === 12) return phone;
-        return phone;
-    }
-    
-    function getQRDataUrl(bill) {
-        return `Pay to: Fire.net.pk\nBill No: ${bill.billNo}\nClient: ${bill.customerName}\nAmount Due: Rs. ${bill.netDue}\nReceipt ID: ${bill.receiptId}\nVerify: ${bill.verifyUrl}`;
-    }
-    
-    async function generateMainAppQR(bill) {
-        let qrData = getQRDataUrl(bill);
-        try {
-            return await QRCode.toDataURL(qrData, { width: 200, margin: 2 });
-        } catch(e) {
-            return `https://quickchart.io/qr?size=200&text=${encodeURIComponent(qrData)}`;
-        }
-    }
-    
-    function generateWhatsAppMessage(bill) {
-        let status = bill.netDue === 0 ? '✅ PAID' : (bill.alreadyPaid > 0 ? '🟡 PARTIAL' : '🔴 UNPAID');
-        let period = getMonthDateRange(bill.billMonth);
-        let lastPayment = bill.payments && bill.payments.length > 0 ? bill.payments[bill.payments.length - 1] : null;
-        return `*FIRE.NET.PK - MONTHLY BILL*
-━━━━━━━━━━━━━━━━━━━━
-*Bill No:* ${bill.billNo}
-*Receipt ID:* ${bill.receiptId}
-*Month:* ${bill.billMonth}
-*Period:* ${period.start} to ${period.end}
-*Due Date:* ${bill.dueDate}
-
-👤 *CUSTOMER DETAILS*
-Name: ${bill.customerName}
-Mobile: ${bill.mobile}
-Client Code: ${bill.clientCode}
-User ID: ${bill.userId}
-Package: ${bill.package}
-Area: ${bill.area}
-
-💰 *BILL SUMMARY*
-Monthly Bill: Rs. ${numberFormat(bill.monthlyBillAmount)}
-Discount: Rs. ${numberFormat(bill.discount)}
-Already Paid: Rs. ${numberFormat(bill.alreadyPaid)}
-*Net Due: Rs. ${numberFormat(bill.netDue)}*
-${lastPayment ? `Last Payment: Rs. ${lastPayment.amount} on ${lastPayment.timestamp || lastPayment.date}` : ''}
-
-📊 *Status:* ${status}
-━━━━━━━━━━━━━━━━━━━━
-Please pay before due date.
-*Fire.net.pk ISP*`;
-    }
-    
     function initFirebase() {
         try {
             if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
@@ -250,10 +158,7 @@ Please pay before due date.
             isFirebaseConnected = true;
             updateSyncAlert('success', 'Firebase connected.');
             return true;
-        } catch(e) {
-            updateSyncAlert('warning', 'Firebase connection failed.');
-            return false;
-        }
+        } catch(e) { updateSyncAlert('warning', 'Firebase connection failed.'); return false; }
     }
     
     function updateSyncAlert(type, message) {
@@ -283,11 +188,12 @@ Please pay before due date.
             for(let client of clientsData) {
                 if(!client.name || !client.mobile) continue;
                 let code = client.ccode || client.pin || client.id?.slice(-4) || '0000';
-                let monthlyAmount = client.bill || client.monthlyFee || client.monthly_bill || 1500;
+                let monthlyAmount = client.bill || client.monthlyFee || 1500;
                 
                 let clientInvoices = invoicesData.filter(inv => 
                     (inv.clientId === client.id || inv.phone === client.mobile || inv.cust === client.name) &&
-                    inv.billMonth === month && inv.work !== 'Monthly Bill');
+                    inv.billMonth === month);
+                
                 let invoiceTotal = clientInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
                 let totalBillAmount = monthlyAmount + invoiceTotal;
                 
@@ -300,6 +206,8 @@ Please pay before due date.
                     let existingBill = bills.find(b => b.clientCode === code && b.billMonth === month);
                     if(existingBill) {
                         existingBill.monthlyBillAmount = totalBillAmount;
+                        existingBill.baseMonthlyAmount = monthlyAmount;
+                        existingBill.invoiceDetails = clientInvoices.map(inv => ({ id: inv.id, work: inv.work || 'Service', amount: inv.total || 0, date: inv.date || inv.time }));
                         existingBill.payments = payments;
                         recalcBill(existingBill);
                         updated++;
@@ -310,18 +218,56 @@ Please pay before due date.
                         package: client.package || 'Standard', area: client.area || '', userId: client.pppoe || '',
                         billMonth: month, issueDate: today(), dueDate: client.dueDate || `${month}-10`,
                         monthlyBillAmount: totalBillAmount, baseMonthlyAmount: monthlyAmount,
-                        discount: 0, payments: payments, invoiceDetails: clientInvoices,
-                        receiptId: generateReceiptId(), qrDataURL: null
+                        discount: 0, payments: payments, 
+                        invoiceDetails: clientInvoices.map(inv => ({ id: inv.id, work: inv.work || 'Service', amount: inv.total || 0, date: inv.date || inv.time })),
+                        receiptId: generateReceiptId()
                     };
                     recalcBill(newBill);
                     bills.push(newBill);
                     added++;
                 }
             }
-            if(added > 0 || updated > 0) { saveLocal(); applyFiltersAndRender(); updateDashboard(); updateFilters(); }
+            if(added > 0 || updated > 0) { saveLocal(); applyFiltersAndRender(); updateDashboard(); updateFilters(); renderInvoicesTab(); }
             updateSyncAlert('success', `✅ Sync complete! Added ${added}, updated ${updated}`);
-            alert(`Sync Complete!\nClients: ${clientsData.length}\nNew bills: ${added}\nUpdated: ${updated}`);
+            alert(`Sync Complete!\nClients: ${clientsData.length}\nNew bills: ${added}\nUpdated: ${updated}\nInvoices loaded: ${invoicesData.length}`);
         } catch(e) { updateSyncAlert('warning', `Sync failed: ${e.message}`); alert("Sync failed: " + e.message); }
+    }
+    
+    function renderInvoicesTab() {
+        let month = currentMonthFilter;
+        let monthInvoices = invoicesData.filter(inv => inv.billMonth === month);
+        let container = document.getElementById('invoicesListContainer');
+        if (!container) return;
+        
+        if (monthInvoices.length === 0) {
+            container.innerHTML = '<div class="text-center py-8 text-gray-400">No invoices found for this month. Sync from Firebase first.</div>';
+            return;
+        }
+        
+        let totalInvoiceAmount = monthInvoices.reduce((s, inv) => s + (inv.total || 0), 0);
+        let groupedByClient = {};
+        monthInvoices.forEach(inv => {
+            let clientName = inv.cust || inv.clientName || 'Unknown';
+            if (!groupedByClient[clientName]) groupedByClient[clientName] = [];
+            groupedByClient[clientName].push(inv);
+        });
+        
+        let html = `<div class="mb-4 p-3 bg-amber-50 rounded-lg"><b>📊 Summary for ${month}</b><br>Total Invoices: ${monthInvoices.length} | Total Amount: Rs. ${numberFormat(totalInvoiceAmount)}</div>`;
+        html += `<div class="space-y-4">`;
+        for (let [client, invs] of Object.entries(groupedByClient)) {
+            let clientTotal = invs.reduce((s, inv) => s + (inv.total || 0), 0);
+            html += `<div class="border rounded-lg overflow-hidden">
+                <div class="bg-gray-100 p-3 font-bold">👤 ${escapeHtml(client)} <span class="float-right">Total: Rs. ${numberFormat(clientTotal)}</span></div>
+                <table class="w-full text-sm">`;
+            invs.forEach(inv => {
+                html += `<tr class="border-b"><td class="p-2 pl-4">📄 ${escapeHtml(inv.work || 'Invoice')}</td>
+                        <td class="p-2 text-right">Rs. ${numberFormat(inv.total || 0)}</td>
+                        <td class="p-2 text-right text-gray-500">${inv.date || inv.time || ''}</td></tr>`;
+            });
+            html += `</table></div>`;
+        }
+        html += `</div>`;
+        container.innerHTML = html;
     }
     
     function autoGenerateBills(){
@@ -339,7 +285,7 @@ Please pay before due date.
                 package: c.package || 'Standard', area: c.area || '', userId: c.pppoe || '',
                 billMonth: month, issueDate: today(), dueDate: c.dueDate || `${month}-10`,
                 monthlyBillAmount: amount, baseMonthlyAmount: amount, discount: 0, payments: [],
-                invoiceDetails: [], receiptId: generateReceiptId(), qrDataURL: null
+                invoiceDetails: [], receiptId: generateReceiptId()
             };
             recalcBill(newBill);
             bills.push(newBill);
@@ -382,18 +328,22 @@ Please pay before due date.
         let start = (currentPage-1)*PAGE_SIZE;
         let pageBills = filteredBills.slice(start, start+PAGE_SIZE);
         if(pageBills.length === 0 && filteredBills.length === 0){ 
-            tbody.innerHTML = '<tr><td colspan="12" class="text-center py-8 text-gray-400">No bills found. Sync from Firebase.</td><tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center py-8 text-gray-400">No bills found. Sync from Firebase.</td></tr>';
             return; 
         }
         tbody.innerHTML = pageBills.map(bill => {
             let status = getBillStatus(bill);
             let statusText = status === 'paid' ? 'Paid' : (status === 'partial' ? 'Partial' : 'Unpaid');
             let statusColor = status === 'paid' ? 'bg-green-100 text-green-800' : (status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800');
+            let hasInvoices = bill.invoiceDetails && bill.invoiceDetails.length > 0;
             return `<tr>
                 <td class="px-3 py-2"><input type="checkbox" class="bill-select" data-id="${bill.id}"></td>
-                <td class="px-3 py-2">${escapeHtml(bill.clientCode)}</td><td class="px-3 py-2">${escapeHtml(bill.customerName)}</td>
-                <td class="px-3 py-2">${escapeHtml(bill.mobile)}</td><td class="px-3 py-2">${escapeHtml(bill.package)}</td>
-                <td class="px-3 py-2">${escapeHtml(bill.area)}</td><td class="px-3 py-2">${escapeHtml(bill.billMonth)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.clientCode)}${hasInvoices ? '<br><span class="text-xs text-amber-600">+inv</span>' : ''}</td>
+                <td class="px-3 py-2 font-medium">${escapeHtml(bill.customerName)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.mobile)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.package)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.area)}</td>
+                <td class="px-3 py-2">${escapeHtml(bill.billMonth)}</td>
                 <td class="px-3 py-2 text-right">Rs. ${numberFormat(bill.monthlyBillAmount)}</td>
                 <td class="px-3 py-2 text-right">Rs. ${numberFormat(bill.alreadyPaid)}</td>
                 <td class="px-3 py-2 text-right font-bold text-red-600">Rs. ${numberFormat(bill.netDue)}</td>
@@ -403,9 +353,8 @@ Please pay before due date.
                     <i class="fab fa-whatsapp text-green-600 whatsapp-single mx-1 cursor-pointer" data-id="${bill.id}"></i>
                     <i class="fas fa-edit text-amber-600 edit-bill mx-1 cursor-pointer" data-id="${bill.id}"></i>
                     <i class="fas fa-trash-alt text-red-500 delete-bill mx-1 cursor-pointer" data-id="${bill.id}"></i>
-                    <i class="fas fa-money-bill-wave text-green-600 partial-payment mx-1 cursor-pointer" data-id="${bill.id}"></i>
                 </td>
-            </tr>`;
+            <tr>`;
         }).join('');
         attachTableEvents();
     }
@@ -440,16 +389,206 @@ Please pay before due date.
     function attachTableEvents(){ 
         document.querySelectorAll('.print-single').forEach(el => el.addEventListener('click', () => printBillById(parseInt(el.dataset.id))));
         document.querySelectorAll('.whatsapp-single').forEach(el => el.addEventListener('click', () => sendSingleWhatsApp(parseInt(el.dataset.id))));
-        document.querySelectorAll('.edit-bill').forEach(el => el.addEventListener('click', () => openBillModal(bills.find(b=>b.id===parseInt(el.dataset.id)))));
-        document.querySelectorAll('.delete-bill').forEach(el => el.addEventListener('click', () => { if(confirm('Delete?')){ let id=parseInt(el.dataset.id); bills=bills.filter(b=>b.id!==id); saveLocal(); applyFiltersAndRender(); updateDashboard(); } }));
-        document.querySelectorAll('.partial-payment').forEach(el => el.addEventListener('click', () => openPartialPayment(parseInt(el.dataset.id))));
+        document.querySelectorAll('.edit-bill').forEach(el => el.addEventListener('click', () => openEditBillModal(bills.find(b=>b.id===parseInt(el.dataset.id)))));
+        document.querySelectorAll('.delete-bill').forEach(el => el.addEventListener('click', () => { if(confirm('Delete bill?')){ let id=parseInt(el.dataset.id); bills=bills.filter(b=>b.id!==id); saveLocal(); applyFiltersAndRender(); updateDashboard(); } }));
         document.querySelectorAll('.bill-select').forEach(cb => cb.addEventListener('change', updateSelectAllHeader));
+    }
+    
+    // ============= EDIT BILL MODAL WITH DIRECT EDITABLE PAID AMOUNT =============
+    function openEditBillModal(bill) {
+        let tempReceivedAmount = bill.alreadyPaid;
+        
+        let invoiceBreakdownHtml = '';
+        if (bill.invoiceDetails && bill.invoiceDetails.length > 0) {
+            invoiceBreakdownHtml = `<div class="border-t pt-3 mt-2">
+                <h3 class="font-bold text-amber-700"><i class="fas fa-receipt"></i> Invoice Breakdown (Added to Bill)</h3>
+                <div class="bg-amber-50 p-2 rounded-lg mt-1">`;
+            bill.invoiceDetails.forEach(inv => {
+                invoiceBreakdownHtml += `<div class="flex justify-between text-sm py-1"><span>📄 ${escapeHtml(inv.work || 'Invoice')}</span><span>Rs. ${numberFormat(inv.amount)}</span></div>`;
+            });
+            invoiceBreakdownHtml += `<div class="flex justify-between font-bold border-t pt-1 mt-1"><span>Total from Invoices</span><span>Rs. ${numberFormat(bill.invoiceDetails.reduce((s,i)=>s+i.amount,0))}</span></div>`;
+            invoiceBreakdownHtml += `</div></div>`;
+        }
+        
+        let html = `
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="text-sm font-bold">Customer Name</label><input id="eName" value="${escapeHtml(bill.customerName)}" class="border rounded p-2 w-full"></div>
+                    <div><label class="text-sm font-bold">Mobile</label><input id="eMobile" value="${escapeHtml(bill.mobile)}" class="border rounded p-2 w-full"></div>
+                    <div><label class="text-sm font-bold">Client Code</label><input id="eCode" value="${escapeHtml(bill.clientCode)}" class="border rounded p-2 w-full"></div>
+                    <div><label class="text-sm font-bold">Package</label><input id="ePkg" value="${escapeHtml(bill.package)}" class="border rounded p-2 w-full"></div>
+                    <div><label class="text-sm font-bold">Area</label><input id="eArea" value="${escapeHtml(bill.area)}" class="border rounded p-2 w-full"></div>
+                    <div><label class="text-sm font-bold">User ID</label><input id="eUser" value="${escapeHtml(bill.userId)}" class="border rounded p-2 w-full"></div>
+                    <div><label class="text-sm font-bold">Bill Month</label><input id="eMonth" value="${bill.billMonth}" class="border rounded p-2 w-full"></div>
+                    <div><label class="text-sm font-bold">Due Date</label><input id="eDue" value="${bill.dueDate}" class="border rounded p-2 w-full"></div>
+                </div>
+                
+                <div class="grid grid-cols-3 gap-3">
+                    <div><label class="text-sm font-bold">Monthly Package (Rs)</label><input id="eBaseAmount" type="number" value="${bill.baseMonthlyAmount || bill.monthlyBillAmount}" class="border rounded p-2 w-full"></div>
+                    ${invoiceBreakdownHtml}
+                </div>
+                
+                <!-- DIRECT EDITABLE PAID AMOUNT FIELD -->
+                <div class="border-2 border-blue-400 rounded-lg p-4 bg-blue-50">
+                    <label class="text-md font-bold text-blue-800"><i class="fas fa-edit"></i> EDIT RECEIVED AMOUNT</label>
+                    <div class="grid grid-cols-2 gap-3 mt-2">
+                        <div>
+                            <input id="editReceivedAmount" type="number" value="${bill.alreadyPaid}" class="editable-paid-field w-full p-3 text-xl font-bold rounded-lg border-2 border-blue-400">
+                            <p class="text-xs text-gray-500 mt-1">Directly edit the total received amount</p>
+                        </div>
+                        <div>
+                            <label class="text-sm">Payment Method for adjustment</label>
+                            <select id="editMethod" class="border rounded p-2 w-full">
+                                <option>Cash</option><option>Bank Transfer</option><option>JazzCash</option><option>Easypaisa</option>
+                            </select>
+                            <button id="applyReceivedBtn" class="mt-2 bg-blue-600 text-white px-3 py-1 rounded w-full">Apply Amount</button>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-600">Current Total Received: <span id="currentReceivedDisplay" class="font-bold text-green-600">Rs. ${numberFormat(bill.alreadyPaid)}</span></div>
+                </div>
+                
+                <!-- Bill Summary -->
+                <div class="bg-gray-100 p-3 rounded-lg text-center">
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><span class="text-xs">Monthly Bill</span><br><b id="displayMonthlyBill">Rs. ${numberFormat(bill.monthlyBillAmount)}</b></div>
+                        <div><span class="text-xs">Discount</span><br><input id="editDiscount" type="number" value="${bill.discount}" class="w-24 text-center border rounded p-1"></div>
+                        <div><span class="text-xs">Net Due</span><br><b id="displayNetDue" class="text-red-600">Rs. ${numberFormat(bill.netDue)}</b></div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 pt-2">
+                    <button id="saveEditBillBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex-1">💾 Save Changes</button>
+                    <button id="closeEditModalBtn" class="border border-gray-300 px-4 py-2 rounded-lg">Cancel</button>
+                </div>
+            </div>
+        `;
+        
+        openModalWithContent(html, 'Edit Bill');
+        
+        function updateCalculations() {
+            let baseAmount = parseFloat(document.getElementById('eBaseAmount')?.value) || 0;
+            let discount = parseFloat(document.getElementById('editDiscount')?.value) || 0;
+            let received = parseFloat(document.getElementById('editReceivedAmount')?.value) || 0;
+            let invoiceTotal = (bill.invoiceDetails || []).reduce((s, i) => s + (i.amount || 0), 0);
+            let totalBill = baseAmount + invoiceTotal;
+            let netDue = totalBill - discount - received;
+            if (netDue < 0) netDue = 0;
+            
+            document.getElementById('displayMonthlyBill').innerHTML = `Rs. ${numberFormat(totalBill)}`;
+            document.getElementById('displayNetDue').innerHTML = `Rs. ${numberFormat(netDue)}`;
+            document.getElementById('currentReceivedDisplay').innerHTML = `Rs. ${numberFormat(received)}`;
+        }
+        
+        document.getElementById('eBaseAmount')?.addEventListener('input', updateCalculations);
+        document.getElementById('editDiscount')?.addEventListener('input', updateCalculations);
+        document.getElementById('editReceivedAmount')?.addEventListener('input', updateCalculations);
+        
+        document.getElementById('applyReceivedBtn')?.addEventListener('click', () => {
+            let newReceived = parseFloat(document.getElementById('editReceivedAmount').value) || 0;
+            let currentReceived = bill.alreadyPaid;
+            let diff = newReceived - currentReceived;
+            
+            if (Math.abs(diff) < 0.01) {
+                alert("Amount is already " + numberFormat(currentReceived));
+                return;
+            }
+            
+            let method = document.getElementById('editMethod').value;
+            let timestamp = getCurrentTimestamp();
+            
+            if (diff > 0) {
+                bill.payments.push({
+                    amount: diff,
+                    method: method,
+                    date: today(),
+                    timestamp: timestamp,
+                    note: 'Manual adjustment'
+                });
+            } else {
+                let amountToRemove = Math.abs(diff);
+                while (amountToRemove > 0 && bill.payments.length > 0) {
+                    let lastPayment = bill.payments[bill.payments.length - 1];
+                    if (lastPayment.amount > amountToRemove) {
+                        lastPayment.amount -= amountToRemove;
+                        amountToRemove = 0;
+                    } else {
+                        amountToRemove -= lastPayment.amount;
+                        bill.payments.pop();
+                    }
+                }
+            }
+            
+            bill.alreadyPaid = newReceived;
+            recalcBill(bill);
+            updateCalculations();
+            alert(`Received amount updated to Rs. ${numberFormat(newReceived)}`);
+        });
+        
+        document.getElementById('saveEditBillBtn').onclick = () => {
+            bill.customerName = document.getElementById('eName').value;
+            bill.mobile = document.getElementById('eMobile').value;
+            bill.clientCode = document.getElementById('eCode').value;
+            bill.package = document.getElementById('ePkg').value;
+            bill.area = document.getElementById('eArea').value;
+            bill.userId = document.getElementById('eUser').value;
+            bill.billMonth = document.getElementById('eMonth').value;
+            bill.dueDate = document.getElementById('eDue').value;
+            bill.baseMonthlyAmount = parseFloat(document.getElementById('eBaseAmount').value) || 0;
+            let invoiceTotal = (bill.invoiceDetails || []).reduce((s, i) => s + (i.amount || 0), 0);
+            bill.monthlyBillAmount = bill.baseMonthlyAmount + invoiceTotal;
+            bill.discount = parseFloat(document.getElementById('editDiscount').value) || 0;
+            bill.alreadyPaid = parseFloat(document.getElementById('editReceivedAmount').value) || 0;
+            
+            let netDue = bill.monthlyBillAmount - bill.discount - bill.alreadyPaid;
+            bill.netDue = netDue > 0 ? netDue : 0;
+            
+            saveLocal();
+            applyFiltersAndRender();
+            updateDashboard();
+            closeModal();
+            alert(`Bill updated!\nTotal Bill: Rs. ${numberFormat(bill.monthlyBillAmount)}\nReceived: Rs. ${numberFormat(bill.alreadyPaid)}\nNet Due: Rs. ${numberFormat(bill.netDue)}`);
+        };
+        
+        document.getElementById('closeEditModalBtn').onclick = closeModal;
+        updateCalculations();
+    }
+    
+    function generateWhatsAppMessage(bill) {
+        let status = bill.netDue === 0 ? '✅ PAID' : (bill.alreadyPaid > 0 ? '🟡 PARTIAL' : '🔴 UNPAID');
+        let period = getMonthDateRange(bill.billMonth);
+        let invoiceText = '';
+        if (bill.invoiceDetails && bill.invoiceDetails.length > 0) {
+            invoiceText = '\n\n📄 *INVOICE BREAKDOWN*' + bill.invoiceDetails.map(inv => `\n${inv.work}: Rs. ${numberFormat(inv.amount)}`).join('');
+        }
+        return `*FIRE.NET.PK - MONTHLY BILL*
+━━━━━━━━━━━━━━━━━━━━
+*Bill No:* ${bill.billNo}
+*Month:* ${bill.billMonth}
+*Period:* ${period.start} to ${period.end}
+*Due Date:* ${bill.dueDate}
+
+👤 *CUSTOMER DETAILS*
+Name: ${bill.customerName}
+Mobile: ${bill.mobile}
+Client Code: ${bill.clientCode}
+Package: ${bill.package}
+
+💰 *BILL SUMMARY*
+Monthly Package: Rs. ${numberFormat(bill.baseMonthlyAmount || bill.monthlyBillAmount)}${invoiceText}
+Discount: Rs. ${numberFormat(bill.discount)}
+Already Paid: Rs. ${numberFormat(bill.alreadyPaid)}
+*Net Due: Rs. ${numberFormat(bill.netDue)}*
+
+📊 *Status:* ${status}
+━━━━━━━━━━━━━━━━━━━━
+Please pay before due date.`;
     }
     
     async function sendSingleWhatsApp(billId) {
         let bill = bills.find(b => b.id === billId);
         if(!bill) return;
-        let phone = formatWhatsAppNumber(bill.mobile);
+        let phone = String(bill.mobile).replace(/\D/g, '');
+        if(phone.startsWith('0') && phone.length === 11) phone = '92' + phone.slice(1);
         if(!phone) { alert("No valid mobile number."); return; }
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(generateWhatsAppMessage(bill))}`, '_blank');
     }
@@ -460,7 +599,11 @@ Please pay before due date.
         let selected = bills.filter(b => ids.includes(b.id) && getBillStatus(b) !== 'paid');
         if(selected.length === 0) { alert("Selected bills are paid."); return; }
         if(!confirm(`Send to ${selected.length} client(s)?`)) return;
-        for(let i=0; i<selected.length; i++) setTimeout(() => { let p = formatWhatsAppNumber(selected[i].mobile); if(p) window.open(`https://wa.me/${p}?text=${encodeURIComponent(generateWhatsAppMessage(selected[i]))}`, '_blank'); }, i*800);
+        for(let i=0; i<selected.length; i++) setTimeout(() => { 
+            let p = String(selected[i].mobile).replace(/\D/g, '');
+            if(p.startsWith('0') && p.length === 11) p = '92' + p.slice(1);
+            if(p) window.open(`https://wa.me/${p}?text=${encodeURIComponent(generateWhatsAppMessage(selected[i]))}`, '_blank'); 
+        }, i*800);
     }
     
     function updateDashboard(){ 
@@ -480,416 +623,46 @@ Please pay before due date.
             <div class="bg-white p-3 rounded-xl shadow border-l-4 border-purple-500"><div class="text-xs">Paid/Partial/Unpaid</div><div class="text-lg font-bold">${paidCount}/${partialCount}/${unpaidCount}</div></div>`;
     }
     
-    // ============= FIXED EDIT BILL MODAL WITH EDITABLE PAID AMOUNT =============
-    function openBillModal(bill) {
-        // Store working copy of payments
-        let workingPayments = [...(bill.payments || [])];
-        
-        function calculateTotalsAndUpdate() {
-            let totalPaid = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
-            let monthlyAmount = parseFloat(document.getElementById('eAmount')?.value) || 0;
-            let discount = parseFloat(document.getElementById('eDiscount')?.value) || 0;
-            let netDue = monthlyAmount - discount - totalPaid;
-            
-            let totalPaidSpan = document.getElementById('totalPaidSpan');
-            let netDueSpan = document.getElementById('netDueSpan');
-            if (totalPaidSpan) totalPaidSpan.innerText = numberFormat(totalPaid);
-            if (netDueSpan) netDueSpan.innerText = numberFormat(netDue > 0 ? netDue : 0);
-            
-            // Update due input if exists
-            let dueInput = document.getElementById('eDueAmount');
-            if (dueInput) dueInput.value = netDue > 0 ? netDue : 0;
-        }
-        
-        function renderPaymentsList() {
-            let container = document.getElementById('paymentsListContainer');
-            if (!container) return;
-            
-            if (workingPayments.length === 0) {
-                container.innerHTML = '<div class="text-gray-400 text-center py-3">No payments recorded yet</div>';
-                return;
-            }
-            
-            container.innerHTML = workingPayments.map((p, idx) => `
-                <div class="payment-row">
-                    <div>
-                        <span class="font-medium">Rs. ${numberFormat(p.amount)}</span> 
-                        via <span class="text-sm">${escapeHtml(p.method)}</span>
-                        <div class="text-xs text-gray-500">${p.timestamp || p.date || ''}</div>
-                    </div>
-                    <div>
-                        <button class="text-red-500 text-xs remove-payment-btn" data-idx="${idx}"><i class="fas fa-trash"></i> Remove</button>
-                    </div>
-                </div>
-            `).join('');
-            
-            document.querySelectorAll('.remove-payment-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    let idx = parseInt(btn.dataset.idx);
-                    workingPayments.splice(idx, 1);
-                    renderPaymentsList();
-                    calculateTotalsAndUpdate();
-                });
-            });
-        }
-        
-        // Build modal HTML with editable paid amount section
-        let html = `
-            <div class="space-y-4">
-                <!-- Customer Info -->
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="text-sm font-bold">Customer Name</label><input id="eName" value="${escapeHtml(bill.customerName)}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">Mobile</label><input id="eMobile" value="${escapeHtml(bill.mobile)}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">Client Code</label><input id="eCode" value="${escapeHtml(bill.clientCode)}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">Package</label><input id="ePkg" value="${escapeHtml(bill.package)}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">Area</label><input id="eArea" value="${escapeHtml(bill.area)}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">User ID/PPPoE</label><input id="eUser" value="${escapeHtml(bill.userId)}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">Bill Month</label><input id="eMonth" value="${bill.billMonth}" class="border rounded p-2 w-full"></div>
-                    <div><label class="text-sm font-bold">Due Date</label><input id="eDue" value="${bill.dueDate}" class="border rounded p-2 w-full"></div>
-                </div>
-                
-                <!-- Bill Amount Section -->
-                <div class="grid grid-cols-3 gap-3">
-                    <div><label class="text-sm font-bold">Monthly Bill (Rs)</label><input id="eAmount" type="number" value="${bill.monthlyBillAmount}" class="border rounded p-2 w-full" oninput="if(window.calcTotals) window.calcTotals()"></div>
-                    <div><label class="text-sm font-bold">Discount (Rs)</label><input id="eDiscount" type="number" value="${bill.discount}" class="border rounded p-2 w-full" oninput="if(window.calcTotals) window.calcTotals()"></div>
-                    <div><label class="text-sm font-bold">Net Due (Rs)</label><input id="eDueAmount" type="number" readonly class="border rounded p-2 w-full bg-gray-100" value="${bill.netDue}"></div>
-                </div>
-                
-                <!-- EDITABLE PAID AMOUNT SECTION - NEW -->
-                <div class="border-2 border-blue-300 rounded-lg p-3 bg-blue-50">
-                    <div class="flex justify-between items-center mb-2">
-                        <label class="text-sm font-bold text-blue-800"><i class="fas fa-edit"></i> EDIT PAID AMOUNT</label>
-                        <span class="text-xs text-blue-600">Directly edit total received</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="text-sm">Total Paid Amount (Rs)</label>
-                            <input id="editableTotalPaid" type="number" value="${bill.alreadyPaid}" class="border-2 border-blue-400 rounded p-2 w-full editable-paid" oninput="updatePaymentsFromTotal()">
-                            <p class="text-xs text-gray-500 mt-1">Edit this amount to adjust total received</p>
-                        </div>
-                        <div>
-                            <label class="text-sm">Payment Method</label>
-                            <select id="editPaymentMethod" class="border rounded p-2 w-full">
-                                <option value="Cash">Cash</option>
-                                <option value="Bank Transfer">Bank Transfer</option>
-                                <option value="JazzCash">JazzCash</option>
-                                <option value="Easypaisa">Easypaisa</option>
-                            </select>
-                            <button id="applyPaidAmountBtn" class="mt-2 bg-blue-600 text-white text-sm px-3 py-1 rounded w-full">Apply & Add as Payment</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Total Received Display -->
-                <div class="total-received-box">
-                    <span class="text-sm font-bold">💰 Total Received: </span>
-                    <span id="totalPaidSpan" class="text-xl font-bold text-green-600">Rs. ${numberFormat(bill.alreadyPaid)}</span>
-                    <span class="text-sm mx-2">|</span>
-                    <span class="text-sm font-bold">Net Due: </span>
-                    <span id="netDueSpan" class="text-xl font-bold text-red-600">Rs. ${numberFormat(bill.netDue)}</span>
-                </div>
-                
-                <!-- Payment History -->
-                <div class="border-t pt-3">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="font-bold"><i class="fas fa-history"></i> Payment History</h3>
-                        <button id="addPaymentFromEditBtn" class="bg-green-500 text-white text-xs px-3 py-1 rounded-full">+ Add Single Payment</button>
-                    </div>
-                    <div id="paymentsListContainer" class="max-h-48 overflow-auto bg-gray-50 rounded-lg p-2">
-                        ${workingPayments.length === 0 ? '<div class="text-gray-400 text-center py-3">No payments recorded yet</div>' : 
-                            workingPayments.map((p, idx) => `
-                            <div class="payment-row">
-                                <div><span class="font-medium">Rs. ${numberFormat(p.amount)}</span> via <span class="text-sm">${escapeHtml(p.method)}</span><div class="text-xs text-gray-500">${p.timestamp || p.date || ''}</div></div>
-                                <div><button class="text-red-500 text-xs remove-payment-btn" data-idx="${idx}"><i class="fas fa-trash"></i> Remove</button></div>
-                            </div>`).join('')
-                        }
-                    </div>
-                </div>
-                
-                <div class="flex gap-2 pt-2">
-                    <button id="saveEditBillBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg flex-1">Save Changes</button>
-                    <button id="closeEditModalBtn" class="border border-gray-300 px-4 py-2 rounded-lg">Cancel</button>
-                </div>
-            </div>
-        `;
-        
-        openModalWithContent(html, 'Edit Bill');
-        
-        // Function to update payments from total amount
-        window.updatePaymentsFromTotal = function() {
-            let newTotal = parseFloat(document.getElementById('editableTotalPaid')?.value) || 0;
-            let currentTotal = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
-            
-            if (Math.abs(newTotal - currentTotal) < 0.01) return;
-            
-            let difference = newTotal - currentTotal;
-            
-            if (difference > 0) {
-                // Add a new payment for the difference
-                let method = document.getElementById('editPaymentMethod')?.value || 'Cash';
-                workingPayments.push({
-                    amount: difference,
-                    method: method,
-                    date: today(),
-                    timestamp: getCurrentTimestamp(),
-                    note: 'Manual adjustment from edit'
-                });
-            } else if (difference < 0) {
-                // Remove from last payment(s) until difference is covered
-                let amountToRemove = Math.abs(difference);
-                while (amountToRemove > 0 && workingPayments.length > 0) {
-                    let lastPayment = workingPayments[workingPayments.length - 1];
-                    if (lastPayment.amount > amountToRemove) {
-                        lastPayment.amount -= amountToRemove;
-                        amountToRemove = 0;
-                    } else {
-                        amountToRemove -= lastPayment.amount;
-                        workingPayments.pop();
-                    }
-                }
-            }
-            
-            renderPaymentsList();
-            calculateTotalsAndUpdate();
-        };
-        
-        window.calcTotals = function() {
-            calculateTotalsAndUpdate();
-        };
-        
-        function renderPaymentsList() {
-            let container = document.getElementById('paymentsListContainer');
-            if (!container) return;
-            
-            if (workingPayments.length === 0) {
-                container.innerHTML = '<div class="text-gray-400 text-center py-3">No payments recorded yet</div>';
-                return;
-            }
-            
-            container.innerHTML = workingPayments.map((p, idx) => `
-                <div class="payment-row">
-                    <div>
-                        <span class="font-medium">Rs. ${numberFormat(p.amount)}</span> 
-                        via <span class="text-sm">${escapeHtml(p.method)}</span>
-                        <div class="text-xs text-gray-500">${p.timestamp || p.date || ''}</div>
-                    </div>
-                    <div>
-                        <button class="text-red-500 text-xs remove-payment-btn" data-idx="${idx}"><i class="fas fa-trash"></i> Remove</button>
-                    </div>
-                </div>
-            `).join('');
-            
-            document.querySelectorAll('.remove-payment-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    let idx = parseInt(btn.dataset.idx);
-                    workingPayments.splice(idx, 1);
-                    renderPaymentsList();
-                    calculateTotalsAndUpdate();
-                    // Update editable total field
-                    let newTotal = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
-                    let totalInput = document.getElementById('editableTotalPaid');
-                    if (totalInput) totalInput.value = newTotal;
-                });
-            });
-        }
-        
-        function calculateTotalsAndUpdate() {
-            let totalPaid = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
-            let monthlyAmount = parseFloat(document.getElementById('eAmount')?.value) || 0;
-            let discount = parseFloat(document.getElementById('eDiscount')?.value) || 0;
-            let netDue = monthlyAmount - discount - totalPaid;
-            
-            let totalPaidSpan = document.getElementById('totalPaidSpan');
-            let netDueSpan = document.getElementById('netDueSpan');
-            if (totalPaidSpan) totalPaidSpan.innerText = numberFormat(totalPaid);
-            if (netDueSpan) netDueSpan.innerText = numberFormat(netDue > 0 ? netDue : 0);
-            
-            let dueInput = document.getElementById('eDueAmount');
-            if (dueInput) dueInput.value = netDue > 0 ? netDue : 0;
-            
-            let editableTotal = document.getElementById('editableTotalPaid');
-            if (editableTotal && parseFloat(editableTotal.value) !== totalPaid) {
-                editableTotal.value = totalPaid;
-            }
-        }
-        
-        // Add single payment button
-        let addBtn = document.getElementById('addPaymentFromEditBtn');
-        if (addBtn) {
-            addBtn.onclick = () => {
-                let amount = parseFloat(prompt("Enter payment amount (Rs)", ""));
-                if (isNaN(amount) || amount <= 0) return;
-                let method = prompt("Payment method (Cash, Bank, JazzCash, Easypaisa)", "Cash");
-                let date = prompt("Date (YYYY-MM-DD)", today());
-                if (method && date) {
-                    workingPayments.push({
-                        amount: amount,
-                        method: method,
-                        date: date,
-                        timestamp: getCurrentTimestamp(),
-                        note: ""
-                    });
-                    renderPaymentsList();
-                    calculateTotalsAndUpdate();
-                    let totalInput = document.getElementById('editableTotalPaid');
-                    if (totalInput) totalInput.value = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
-                }
-            };
-        }
-        
-        // Apply paid amount button
-        let applyBtn = document.getElementById('applyPaidAmountBtn');
-        if (applyBtn) {
-            applyBtn.onclick = () => {
-                let newTotal = parseFloat(document.getElementById('editableTotalPaid')?.value) || 0;
-                let currentTotal = workingPayments.reduce((s, p) => s + (p.amount || 0), 0);
-                let difference = newTotal - currentTotal;
-                
-                if (Math.abs(difference) < 0.01) {
-                    alert("Amount is already " + numberFormat(currentTotal));
-                    return;
-                }
-                
-                let method = document.getElementById('editPaymentMethod')?.value || 'Cash';
-                
-                if (difference > 0) {
-                    workingPayments.push({
-                        amount: difference,
-                        method: method,
-                        date: today(),
-                        timestamp: getCurrentTimestamp(),
-                        note: 'Manual adjustment'
-                    });
-                } else {
-                    let amountToRemove = Math.abs(difference);
-                    while (amountToRemove > 0 && workingPayments.length > 0) {
-                        let lastPayment = workingPayments[workingPayments.length - 1];
-                        if (lastPayment.amount > amountToRemove) {
-                            lastPayment.amount -= amountToRemove;
-                            amountToRemove = 0;
-                        } else {
-                            amountToRemove -= lastPayment.amount;
-                            workingPayments.pop();
-                        }
-                    }
-                }
-                
-                renderPaymentsList();
-                calculateTotalsAndUpdate();
-                alert(`Total paid updated to Rs. ${numberFormat(newTotal)}`);
-            };
-        }
-        
-        // Save button
-        let saveBtn = document.getElementById('saveEditBillBtn');
-        if (saveBtn) {
-            saveBtn.onclick = () => {
-                bill.customerName = document.getElementById('eName').value;
-                bill.mobile = document.getElementById('eMobile').value;
-                bill.clientCode = document.getElementById('eCode').value;
-                bill.package = document.getElementById('ePkg').value;
-                bill.area = document.getElementById('eArea').value;
-                bill.userId = document.getElementById('eUser').value;
-                bill.billMonth = document.getElementById('eMonth').value;
-                bill.dueDate = document.getElementById('eDue').value;
-                bill.monthlyBillAmount = parseFloat(document.getElementById('eAmount').value) || 0;
-                bill.discount = parseFloat(document.getElementById('eDiscount').value) || 0;
-                bill.payments = workingPayments;
-                recalcBill(bill);
-                saveLocal();
-                applyFiltersAndRender();
-                updateDashboard();
-                closeModal();
-                alert(`Bill updated!\nTotal Received: Rs. ${bill.alreadyPaid}\nNet Due: Rs. ${bill.netDue}`);
-            };
-        }
-        
-        let closeEditBtn = document.getElementById('closeEditModalBtn');
-        if (closeEditBtn) closeEditBtn.onclick = closeModal;
-        
-        // Initial calculation
-        setTimeout(() => calculateTotalsAndUpdate(), 100);
+    async function generateMainAppQR(bill) {
+        let qrData = `Pay to: Fire.net.pk\nBill No: ${bill.billNo}\nClient: ${bill.customerName}\nAmount Due: Rs. ${bill.netDue}\nReceipt ID: ${bill.receiptId}`;
+        try { return await QRCode.toDataURL(qrData, { width: 200, margin: 2 }); }
+        catch(e) { return `https://quickchart.io/qr?size=200&text=${encodeURIComponent(qrData)}`; }
     }
     
-    // Partial Payment Modal
-    function openPartialPayment(billId){
-        let bill = bills.find(b=>b.id===billId);
-        if(!bill) return;
-        let html = `<div class="space-y-3">
-            <div class="bg-gray-100 p-3 rounded"><b>${escapeHtml(bill.customerName)}</b><br>Current Due: <span class="text-red-600 font-bold">Rs. ${bill.netDue}</span><br>Total Bill: Rs. ${bill.monthlyBillAmount} | Discount: Rs. ${bill.discount}</div>
-            <div class="grid grid-cols-2 gap-2"><div><label>Payment Amount</label><input id="ppAmount" type="number" class="border rounded w-full p-2" value="${bill.netDue}"></div>
-            <div><label>Method</label><select id="ppMethod" class="border rounded w-full p-2"><option>Cash</option><option>Bank Transfer</option><option>JazzCash</option><option>Easypaisa</option></select></div></div>
-            <div><label>Date</label><input id="ppDate" type="date" class="border rounded w-full p-2" value="${today()}"></div>
-            <div><label>Reference/Note</label><input id="ppNote" class="border rounded w-full p-2" placeholder="Transaction ID / Note"></div>
-            <button id="savePartialBtn" class="bg-green-600 text-white px-4 py-2 rounded w-full">Add Payment</button></div>`;
-        openModalWithContent(html, 'Receive Payment');
-        document.getElementById('savePartialBtn').onclick = () => {
-            let amt = parseFloat(document.getElementById('ppAmount').value);
-            if(isNaN(amt) || amt <= 0) return alert("Invalid amount");
-            bill.payments.push({ 
-                amount: amt, 
-                method: document.getElementById('ppMethod').value, 
-                date: document.getElementById('ppDate').value, 
-                timestamp: getCurrentTimestamp(),
-                note: document.getElementById('ppNote').value
-            });
-            recalcBill(bill);
-            saveLocal();
-            applyFiltersAndRender();
-            updateDashboard();
-            closeModal();
-            alert(`Payment recorded!\nAmount: Rs. ${amt}\nTime: ${getCurrentTimestamp()}\nNew due: Rs. ${bill.netDue}`);
-        };
-    }
-    
-    function openModalWithContent(html, title){
-        document.getElementById('modalTitle').innerText = title;
-        document.getElementById('modalBody').innerHTML = html;
-        document.getElementById('billModal').classList.add('active');
-    }
-    
-    function closeModal(){ document.getElementById('billModal').classList.remove('active'); }
-    document.getElementById('closeModalBtn').addEventListener('click', closeModal);
-    
-    // Bill print functions
     async function printBills(billsToPrint, asPdf=false){
         let printHtml = '<div class="print-area">';
         for(let i = 0; i < billsToPrint.length; i++){
             let bill = billsToPrint[i];
             let qrUrl = await generateMainAppQR(bill);
             let period = getMonthDateRange(bill.billMonth);
-            
+            let invoiceRows = '';
+            if(bill.invoiceDetails && bill.invoiceDetails.length > 0){
+                invoiceRows = `<tr style="background:#fffbeb;"><td colspan="2" class="p-2"><b>📋 Additional Invoices</b></td></tr>
+                ${bill.invoiceDetails.map(inv => `<tr style="background:#fffbeb;"><td class="p-2 pl-4">${escapeHtml(inv.work)}</td><td class="p-2 text-right">Rs. ${numberFormat(inv.amount)}</td></tr>`).join('')}`;
+            }
             printHtml += `<div class="page" style="width:100%;max-width:190mm;margin:0 auto;font-family:Arial;color:#111;background:#fff;">
                 <div style="display:flex;justify-content:space-between;border-bottom:3px solid #dc2626;padding-bottom:10px;margin-bottom:14px;">
-                    <div><h1 style="margin:0;color:#dc2626;font-size:28px;">Fire.net.pk</h1><p style="margin:4px 0;font-size:12px;">Main Qazal Bash road<br>Mobile: 03035600435<br>Email: support@firenet.pk</p></div>
-                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;min-width:210px;"><h2 style="margin:0 0 8px;font-size:20px;">MONTHLY INTERNET BILL</h2>
-                    <div><b>Bill No:</b> ${bill.billNo}</div><div><b>Receipt ID:</b> ${bill.receiptId}</div><div><b>Month:</b> ${bill.billMonth}</div>
-                    <div><b>Period:</b> ${period.start} to ${period.end}</div><div><b>Issue:</b> ${bill.issueDate}</div><div><b>Due:</b> <span style="color:#dc2626;">${bill.dueDate}</span></div></div>
+                    <div><h1 style="margin:0;color:#dc2626;">Fire.net.pk</h1><p style="margin:4px 0;font-size:12px;">Main Qazal Bash road<br>Mobile: 03035600435</p></div>
+                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;"><h2 style="margin:0;">MONTHLY BILL</h2>
+                    <div><b>Bill No:</b> ${bill.billNo}</div><div><b>Month:</b> ${bill.billMonth}</div><div><b>Period:</b> ${period.start} to ${period.end}</div>
+                    <div><b>Issue:</b> ${bill.issueDate}</div><div><b>Due:</b> <span style="color:#dc2626;">${bill.dueDate}</span></div></div>
                 </div>
-                <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;margin-bottom:14px;">
+                <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;">
                     <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;"><h3>Bill To</h3>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                         <div><b>Customer</b><br>${escapeHtml(bill.customerName)}</div><div><b>Mobile</b><br>${escapeHtml(bill.mobile)}</div>
                         <div><b>Client Code</b><br>${escapeHtml(bill.clientCode)}</div><div><b>User ID</b><br>${escapeHtml(bill.userId)}</div>
                         <div><b>Package</b><br>${escapeHtml(bill.package)}</div><div><b>Area</b><br>${escapeHtml(bill.area)}</div>
                     </div></div>
-                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;text-align:center;"><h3>Payment QR</h3><img src="${qrUrl}" style="width:160px"><div style="font-size:11px;margin-top:6px;">Scan to verify payment</div></div>
+                    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;text-align:center;"><h3>Payment QR</h3><img src="${qrUrl}" style="width:140px"></div>
                 </div>
-                <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;"><h3>Bill Summary</h3>
-                <table style="width:100%;border-collapse:collapse;">
-                    <tr><td style="padding:8px;">Monthly Package</td><td style="text-align:right;">Rs. ${numberFormat(bill.baseMonthlyAmount || bill.monthlyBillAmount)}</td></tr>
-                    <tr><td style="padding:8px;">Discount</td><td style="text-align:right;">Rs. ${numberFormat(bill.discount)}</td></tr>
-                    <tr style="border-top:1px solid #ddd;"><td style="padding:8px;"><b>Total Bill</b></td><td style="text-align:right;"><b>Rs. ${numberFormat(bill.monthlyBillAmount)}</b></td></tr>
-                    <tr><td style="padding:8px;">Already Paid</td><td style="text-align:right;">Rs. ${numberFormat(bill.alreadyPaid)}</td></tr>
-                    ${bill.payments && bill.payments.length > 0 ? bill.payments.map(p => `<tr style="font-size:11px;"><td style="padding:4px 8px;">└ ${p.timestamp || p.date} (${p.method})</td><td style="text-align:right;">Rs. ${numberFormat(p.amount)}</td></tr>`).join('') : ''}
-                    <tr style="font-size:18px;color:#dc2626;"><td style="padding:8px;"><b>Net Due</b></td><td style="text-align:right;"><b>Rs. ${numberFormat(bill.netDue)}</b></td></tr>
-                </table>
-                </div>
-                <div style="margin-top:14px;padding:12px;border:1px dashed #cbd5e1;border-radius:12px;background:#fcfcfd;font-size:12px;">
-                    <b>Important Note:</b> Please pay before due date. Status: ${bill.netDue===0?'Paid':bill.alreadyPaid>0?'Partial':'Unpaid'}
-                    ${bill.payments && bill.payments.length > 0 ? `<br>Last payment: ${bill.payments[bill.payments.length-1].timestamp || bill.payments[bill.payments.length-1].date}` : ''}
-                </div>
-                <div style="margin-top:14px;font-size:11px;color:#64748b;text-align:center;">Computer generated bill | Receipt ID: ${bill.receiptId}</div>
+                <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-top:14px;"><h3>Bill Summary</h3>
+                <table style="width:100%"><tr><td class="p-2">Monthly Package</td><td class="p-2 text-right">Rs. ${numberFormat(bill.baseMonthlyAmount || bill.monthlyBillAmount)}</td></tr>
+                ${invoiceRows}<tr style="border-top:1px solid #ddd;"><td class="p-2"><b>Total Bill</b></td><td class="p-2 text-right"><b>Rs. ${numberFormat(bill.monthlyBillAmount)}</b></td></tr>
+                <tr><td class="p-2">Discount</td><td class="p-2 text-right">Rs. ${numberFormat(bill.discount)}</td></tr>
+                <tr><td class="p-2">Already Paid</td><td class="p-2 text-right">Rs. ${numberFormat(bill.alreadyPaid)}</td></tr>
+                <tr style="font-size:18px;color:#dc2626;"><td class="p-2"><b>Net Due</b></td><td class="p-2 text-right"><b>Rs. ${numberFormat(bill.netDue)}</b></td></tr></table></div>
+                <div class="text-center text-sm mt-3">Please pay before due date. Status: ${bill.netDue===0?'Paid':bill.alreadyPaid>0?'Partial':'Unpaid'}</div>
             </div>`;
             if(i < billsToPrint.length-1) printHtml += '<div class="page-break"></div>';
         }
@@ -899,13 +672,40 @@ Please pay before due date.
             html2pdf().from(tempDiv).set({margin:[0.5,0.5,0.5,0.5], filename: 'bills.pdf'}).save().then(()=>tempDiv.remove());
         } else { 
             let w = window.open(); 
-            w.document.write(`<html><head><style>@page{size:A4;margin:14mm;}body{background:white;}</style></head><body>${printHtml}<script>window.onload=()=>window.print();<\/script></body></html>`); 
+            w.document.write(`<html><head><style>@page{size:A4;margin:14mm;}</style></head><body>${printHtml}<script>window.onload=()=>window.print();<\/script></body></html>`); 
             w.document.close(); 
         }
     }
     
     async function printBillById(id){ let bill = bills.find(b=>b.id===id); if(bill) await printBills([bill]); }
     function getSelectedBillIds(){ return [...document.querySelectorAll('.bill-select:checked')].map(cb=>parseInt(cb.dataset.id)); }
+    
+    function openModalWithContent(html, title){
+        document.getElementById('modalTitle').innerText = title;
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('billModal').classList.add('active');
+    }
+    function closeModal(){ document.getElementById('billModal').classList.remove('active'); }
+    document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+    
+    // Tab switching
+    document.getElementById('tabBills').addEventListener('click', () => {
+        document.getElementById('billsPanel').classList.remove('hidden');
+        document.getElementById('invoicesPanel').classList.add('hidden');
+        document.getElementById('tabBills').classList.add('bg-red-600', 'text-white');
+        document.getElementById('tabBills').classList.remove('bg-gray-200', 'text-gray-700');
+        document.getElementById('tabInvoices').classList.add('bg-gray-200', 'text-gray-700');
+        document.getElementById('tabInvoices').classList.remove('bg-red-600', 'text-white');
+    });
+    document.getElementById('tabInvoices').addEventListener('click', () => {
+        document.getElementById('billsPanel').classList.add('hidden');
+        document.getElementById('invoicesPanel').classList.remove('hidden');
+        document.getElementById('tabInvoices').classList.add('bg-red-600', 'text-white');
+        document.getElementById('tabInvoices').classList.remove('bg-gray-200', 'text-gray-700');
+        document.getElementById('tabBills').classList.add('bg-gray-200', 'text-gray-700');
+        document.getElementById('tabBills').classList.remove('bg-red-600', 'text-white');
+        renderInvoicesTab();
+    });
     
     // Event Listeners
     document.getElementById('syncFirebaseBtn').addEventListener('click', syncFromFirebase);
@@ -918,7 +718,7 @@ Please pay before due date.
     document.getElementById('areaFilter').addEventListener('change', applyFiltersAndRender);
     document.getElementById('packageFilter').addEventListener('change', applyFiltersAndRender);
     document.getElementById('monthFilter').value = currentMonthFilter; 
-    document.getElementById('monthFilter').addEventListener('change', (e) => { currentMonthFilter = e.target.value; applyFiltersAndRender(); updateDashboard(); });
+    document.getElementById('monthFilter').addEventListener('change', (e) => { currentMonthFilter = e.target.value; applyFiltersAndRender(); updateDashboard(); renderInvoicesTab(); });
     document.getElementById('searchInput').addEventListener('input', (e) => { currentSearch = e.target.value; applyFiltersAndRender(); });
     
     document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', () => {
@@ -929,9 +729,9 @@ Please pay before due date.
     }));
     document.querySelector('.filter-btn[data-filter="all"]').classList.add('filter-active','bg-red-600','text-white');
     
-    // Open add bill modal
+    // Add manual bill
     document.getElementById('openAddBillBtn').addEventListener('click', () => {
-        let newBill = {id: nextId++, customerName: "", mobile: "", clientCode: "", package: "", area: "", userId: "", billMonth: currentMonthFilter, issueDate: today(), dueDate: `${currentMonthFilter}-10`, monthlyBillAmount: 0, baseMonthlyAmount: 0, discount: 0, payments: [], invoiceDetails: [], receiptId: generateReceiptId(), qrDataURL: null};
+        let newBill = {id: nextId++, customerName: "", mobile: "", clientCode: "", package: "", area: "", userId: "", billMonth: currentMonthFilter, issueDate: today(), dueDate: `${currentMonthFilter}-10`, monthlyBillAmount: 0, baseMonthlyAmount: 0, discount: 0, payments: [], invoiceDetails: [], receiptId: generateReceiptId()};
         let html = `<div class="space-y-3"><div class="grid grid-cols-2 gap-2">
             <div><label>Customer Name *</label><input id="eName" class="border rounded p-2 w-full"></div>
             <div><label>Mobile *</label><input id="eMobile" class="border rounded p-2 w-full"></div>
@@ -947,56 +747,35 @@ Please pay before due date.
         <button id="saveNewBillBtn" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Save Bill</button></div>`;
         openModalWithContent(html, 'Add New Bill');
         document.getElementById('saveNewBillBtn').onclick = () => {
-            newBill.customerName = document.getElementById('eName').value; 
-            newBill.mobile = document.getElementById('eMobile').value; 
-            newBill.clientCode = document.getElementById('eCode').value;
-            newBill.package = document.getElementById('ePkg').value; 
-            newBill.area = document.getElementById('eArea').value; 
-            newBill.userId = document.getElementById('eUser').value;
-            newBill.billMonth = document.getElementById('eMonth').value; 
-            newBill.dueDate = document.getElementById('eDue').value; 
-            newBill.monthlyBillAmount = parseFloat(document.getElementById('eAmount').value) || 0;
-            newBill.baseMonthlyAmount = newBill.monthlyBillAmount;
-            newBill.discount = parseFloat(document.getElementById('eDiscount').value) || 0;
+            newBill.customerName = document.getElementById('eName').value; newBill.mobile = document.getElementById('eMobile').value; newBill.clientCode = document.getElementById('eCode').value;
+            newBill.package = document.getElementById('ePkg').value; newBill.area = document.getElementById('eArea').value; newBill.userId = document.getElementById('eUser').value;
+            newBill.billMonth = document.getElementById('eMonth').value; newBill.dueDate = document.getElementById('eDue').value; newBill.monthlyBillAmount = parseFloat(document.getElementById('eAmount').value) || 0;
+            newBill.baseMonthlyAmount = newBill.monthlyBillAmount; newBill.discount = parseFloat(document.getElementById('eDiscount').value) || 0;
             if(!newBill.customerName) return alert("Customer name required");
-            if(!newBill.mobile) return alert("Mobile number required");
-            recalcBill(newBill); 
-            bills.push(newBill); 
-            saveLocal(); 
-            applyFiltersAndRender(); 
-            updateDashboard(); 
-            updateFilters(); 
-            closeModal();
+            recalcBill(newBill); bills.push(newBill); saveLocal(); applyFiltersAndRender(); updateDashboard(); updateFilters(); closeModal();
             alert(`Bill added for ${newBill.customerName}\nDue: Rs. ${newBill.netDue}`);
         };
     });
     
-    // CSV Import/Export
+    // CSV Import
     document.getElementById('csvUpload').addEventListener('change', function(e){ 
-        let file = e.target.files[0]; 
-        if(!file) return; 
+        let file = e.target.files[0]; if(!file) return; 
         Papa.parse(file, {header: true, complete: function(r){ 
             let added = 0; 
             for(let row of r.data){ 
                 if(!row['Customer Name']) continue; 
-                let payments = []; 
-                let paid = parseFloat(row['Already Paid']||0); 
+                let payments = []; let paid = parseFloat(row['Already Paid']||0); 
                 if(paid > 0) payments.push({amount: paid, method: "CSV Import", date: today(), timestamp: getCurrentTimestamp()}); 
-                let nb = {
-                    id: nextId++, customerName: row['Customer Name'], mobile: row['Mobile'], clientCode: row['Client Code'],
+                let nb = { id: nextId++, customerName: row['Customer Name'], mobile: row['Mobile'], clientCode: row['Client Code'],
                     package: row['Package'], area: row['Area'], userId: row['User ID / PPPoE'],
                     billMonth: row['Bill Month'] || currentMonthFilter, issueDate: row['Issue Date'] || today(),
-                    dueDate: row['Due Date'] || `${currentMonthFilter}-10`,
-                    monthlyBillAmount: parseFloat(row['Monthly Bill Amount']) || 0,
-                    baseMonthlyAmount: parseFloat(row['Monthly Bill Amount']) || 0,
-                    discount: parseFloat(row['Discount']) || 0, payments: payments,
-                    invoiceDetails: [], receiptId: generateReceiptId(), qrDataURL: null
-                }; 
+                    dueDate: row['Due Date'] || `${currentMonthFilter}-10`, monthlyBillAmount: parseFloat(row['Monthly Bill Amount']) || 0,
+                    baseMonthlyAmount: parseFloat(row['Monthly Bill Amount']) || 0, discount: parseFloat(row['Discount']) || 0, 
+                    payments: payments, invoiceDetails: [], receiptId: generateReceiptId() }; 
                 recalcBill(nb); bills.push(nb); added++; 
             } 
             if(added){ saveLocal(); applyFiltersAndRender(); updateDashboard(); updateFilters(); alert(`Imported ${added} bills`); } 
-        }}); 
-        e.target.value = ''; 
+        }}); e.target.value = ''; 
     });
     
     document.getElementById('downloadTemplateBtn').addEventListener('click', () => { 
@@ -1007,16 +786,11 @@ Please pay before due date.
     });
     
     document.getElementById('exportBillsBtn').addEventListener('click', () => { 
-        let exportData = bills.map(b => ({
-            "Customer Name": b.customerName, "Mobile": b.mobile, "Client Code": b.clientCode,
-            "Package": b.package, "Area": b.area, "User ID": b.userId,
-            "Bill Month": b.billMonth, "Due Date": b.dueDate,
-            "Monthly Bill": b.monthlyBillAmount, "Discount": b.discount,
-            "Total Paid": b.alreadyPaid, "Net Due": b.netDue,
-            "Status": getBillStatus(b) === 'paid' ? 'Paid' : (getBillStatus(b) === 'partial' ? 'Partial' : 'Unpaid')
-        })); 
-        let csv = Papa.unparse(exportData); 
-        let blob = new Blob([csv], {type: "text/csv"}); 
+        let exportData = bills.map(b => ({ "Customer Name": b.customerName, "Mobile": b.mobile, "Client Code": b.clientCode,
+            "Package": b.package, "Area": b.area, "User ID": b.userId, "Bill Month": b.billMonth, "Due Date": b.dueDate,
+            "Monthly Bill": b.monthlyBillAmount, "Discount": b.discount, "Total Paid": b.alreadyPaid, "Net Due": b.netDue,
+            "Status": getBillStatus(b) === 'paid' ? 'Paid' : (getBillStatus(b) === 'partial' ? 'Partial' : 'Unpaid') })); 
+        let csv = Papa.unparse(exportData); let blob = new Blob([csv], {type: "text/csv"}); 
         let a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `bills_export_${currentMonthFilter}.csv`; a.click(); 
     });
     
@@ -1025,6 +799,7 @@ Please pay before due date.
     updateDashboard();
     updateFilters();
     initFirebase();
+    renderInvoicesTab();
 </script>
 </body>
 </html>
