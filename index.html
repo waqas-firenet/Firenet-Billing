@@ -885,6 +885,252 @@ For online payment or support, contact our support team.
     updateDashboard();
     updateFilters();
     initFirebase();
+    // Add this script after the existing scripts in the first file, before the closing </body> tag
+
+<script>
+// ===== FIX: CONSISTENT RECEIPT/SLIP NUMBER =====
+
+// Single function to generate consistent receipt ID
+function generateConsistentSlipNumber() {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 9000) + 1000;
+    return `FRN-${year}${month}${day}-${hours}${minutes}${seconds}-${random}`;
+}
+
+// Override the saveReceiveBillModal function to use consistent receipt ID
+if (typeof saveReceiveBillModal === 'function') {
+    const originalSaveReceiveBill = saveReceiveBillModal;
+    saveReceiveBillModal = function(clientId, sendWA, printSlip) {
+        // Generate a single receipt ID for this transaction
+        const receiptId = generateConsistentSlipNumber();
+        
+        // Store it globally for this transaction
+        window.__pendingReceiptId = receiptId;
+        
+        // Call original function
+        originalSaveReceiveBill(clientId, sendWA, printSlip);
+        
+        // After save, ensure the bill has the receipt ID
+        setTimeout(() => {
+            const month = currentMonthFilter;
+            const bill = bills.find(b => b.clientCode === clientId || b.id == clientId);
+            if (bill && !bill.receiptId) {
+                bill.receiptId = receiptId;
+                bill.slipNumber = receiptId;
+                saveLocal();
+            }
+            
+            // Also update any payment record
+            const paymentRecord = payments.find(p => p.clientId === clientId && p.billMonth === month);
+            if (paymentRecord && !paymentRecord.receiptId) {
+                paymentRecord.receiptId = receiptId;
+                paymentRecord.slipNumber = receiptId;
+                saveLocal();
+            }
+            
+            window.__pendingReceiptId = null;
+        }, 200);
+    };
+}
+
+// Override printFeeSlip to show the receipt ID
+if (typeof printFeeSlip === 'function') {
+    const originalPrintFeeSlip = printFeeSlip;
+    printFeeSlip = function(clientId) {
+        const month = currentMonthFilter;
+        const bill = bills.find(b => b.clientCode === clientId || b.id == clientId);
+        
+        // Ensure receipt ID exists
+        let receiptId = bill?.receiptId || window.__pendingReceiptId;
+        if (!receiptId) {
+            receiptId = generateConsistentSlipNumber();
+            if (bill) {
+                bill.receiptId = receiptId;
+                bill.slipNumber = receiptId;
+                saveLocal();
+            }
+        }
+        
+        // Get payment info
+        const payment = bill?.payments?.slice().reverse().find(p => p.amount > 0);
+        const paidAmount = payment?.amount || bill?.alreadyPaid || 0;
+        const paymentMode = payment?.method || 'Cash';
+        const receivedBy = payment?.receivedBy || 'Admin';
+        
+        const slipHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Payment Slip - ${receiptId}</title>
+            <style>
+                body{font-family:Arial,sans-serif;padding:20px;color:#111}
+                .slip{max-width:380px;margin:auto;border:2px solid #dc2626;border-radius:12px;padding:18px;background:#fff}
+                .header{text-align:center;border-bottom:2px solid #dc2626;padding-bottom:10px;margin-bottom:15px}
+                .header h1{color:#dc2626;margin:0;font-size:24px}
+                .receipt-id{background:#f0fdf4;padding:8px;border-radius:8px;text-align:center;margin:10px 0;font-weight:bold}
+                table{width:100%;margin:10px 0}
+                td{padding:6px 0;border-bottom:1px dashed #ddd}
+                td:last-child{text-align:right;font-weight:bold}
+                .status{margin-top:15px;padding:8px;text-align:center;border-radius:8px;font-weight:bold}
+                .status.paid{background:#dcfce7;color:#166534}
+                .status.unpaid{background:#fee2e2;color:#991b1b}
+                .footer{text-align:center;font-size:11px;color:#666;margin-top:15px;padding-top:10px;border-top:1px solid #ddd}
+                .qr{text-align:center;margin:10px 0}
+                .qr img{width:120px;height:120px}
+            </style>
+        </head>
+        <body>
+            <div class="slip">
+                <div class="header">
+                    <h1>Fire.net.pk</h1>
+                    <p>Internet Payment Receipt</p>
+                </div>
+                
+                <div class="receipt-id">
+                    🧾 RECEIPT #: ${receiptId}
+                </div>
+                
+                <table>
+                    <tr><td>Client Name:</td><td><b>${escapeHtml(bill?.customerName || '')}</b></td></tr>
+                    <tr><td>Mobile:</td><td>${escapeHtml(bill?.mobile || '')}</td></tr>
+                    <tr><td>Client Code:</td><td>${escapeHtml(bill?.clientCode || '')}</td></tr>
+                    <tr><td>PPPoE/User ID:</td><td>${escapeHtml(bill?.userId || '')}</td></tr>
+                    <tr><td>Package:</td><td>${escapeHtml(bill?.package || '')}</td></tr>
+                    <tr><td>Area:</td><td>${escapeHtml(bill?.area || '')}</td></tr>
+                    <tr><td>Bill Month:</td><td>${escapeHtml(bill?.billMonth || '')}</td></tr>
+                    <tr><td>Monthly Bill:</td><td>Rs. ${numberFormat(bill?.monthlyBillAmount || 0)}</td></tr>
+                    <tr><td>Discount:</td><td>Rs. ${numberFormat(bill?.discount || 0)}</td></tr>
+                    <tr><td>Amount Paid:</td><td><b>Rs. ${numberFormat(paidAmount)}</b></td></tr>
+                    <tr><td>Payment Mode:</td><td>${paymentMode}</td></tr>
+                    <tr><td>Received By:</td><td>${receivedBy}</td></tr>
+                    <tr><td>Remaining Due:</td><td>Rs. ${numberFormat(bill?.netDue || 0)}</td></tr>
+                    <tr><td>Payment Date:</td><td>${new Date().toLocaleString()}</td></tr>
+                </table>
+                
+                <div class="status ${bill?.netDue === 0 ? 'paid' : 'unpaid'}">
+                    ${bill?.netDue === 0 ? '✅ FULLY PAID' : (bill?.alreadyPaid > 0 ? '🟡 PARTIALLY PAID' : '🔴 PENDING')}
+                </div>
+                
+                <div class="footer">
+                    This is a computer-generated receipt.<br>
+                    Keep this receipt for future reference.<br>
+                    Receipt #: ${receiptId}
+                </div>
+            </div>
+        </body>
+        </html>`;
+        
+        const w = window.open('', '_blank');
+        w.document.write(slipHtml);
+        w.document.close();
+        setTimeout(() => w.print(), 500);
+    };
+}
+
+// Override generateWhatsAppMessage to include receipt ID
+if (typeof generateWhatsAppMessage === 'function') {
+    const originalGenerateMessage = generateWhatsAppMessage;
+    generateWhatsAppMessage = function(bill) {
+        // Ensure receipt ID exists
+        let receiptId = bill.receiptId || bill.slipNumber;
+        if (!receiptId && bill.netDue === 0) {
+            receiptId = generateConsistentSlipNumber();
+            bill.receiptId = receiptId;
+            bill.slipNumber = receiptId;
+            saveLocal();
+        }
+        
+        const period = getMonthDateRange(bill.billMonth);
+        const status = bill.netDue === 0 ? '✅ PAID' : (bill.alreadyPaid > 0 ? '🟡 PARTIAL' : '🔴 UNPAID');
+        
+        return `*FIRE.NET.PK - MONTHLY BILL*
+━━━━━━━━━━━━━━━━━━━━
+🧾 *Receipt/Slip #:* ${receiptId || 'N/A'}
+*Bill No:* ${bill.billNo}
+*Bill Month:* ${bill.billMonth}
+*Billing Period:* ${period.start} to ${period.end}
+*Due Date:* ${bill.dueDate}
+
+👤 *CUSTOMER DETAILS*
+Name: ${bill.customerName}
+Mobile: ${bill.mobile}
+Client Code: ${bill.clientCode}
+User ID/PPPoE: ${bill.userId}
+Package: ${bill.package}
+Area: ${bill.area}
+
+💰 *BILL SUMMARY*
+Monthly Bill: Rs. ${numberFormat(bill.monthlyBillAmount)}
+Discount: Rs. ${numberFormat(bill.discount)}
+Already Paid: Rs. ${numberFormat(bill.alreadyPaid)}
+*Net Due: Rs. ${numberFormat(bill.netDue)}*
+
+📊 *Status:* ${status}
+
+━━━━━━━━━━━━━━━━━━━━
+Please pay before due date to avoid service interruption.
+For online payment or support, contact our support team.
+
+*Fire.net.pk ISP Services*`;
+    };
+}
+
+// When recording a payment, always generate and store receipt ID
+if (typeof openPartialPayment === 'function') {
+    const originalOpenPartial = openPartialPayment;
+    openPartialPayment = function(billId) {
+        const bill = bills.find(b => b.id === billId);
+        if (bill && !bill.receiptId) {
+            bill.receiptId = generateConsistentSlipNumber();
+            bill.slipNumber = bill.receiptId;
+            saveLocal();
+        }
+        originalOpenPartial(billId);
+        
+        // Override the save button to include receipt ID
+        setTimeout(() => {
+            const saveBtn = document.getElementById('savePartialBtn');
+            if (saveBtn) {
+                const originalClick = saveBtn.onclick;
+                saveBtn.onclick = function() {
+                    const receiptId = bill?.receiptId || generateConsistentSlipNumber();
+                    if (bill && !bill.receiptId) {
+                        bill.receiptId = receiptId;
+                        bill.slipNumber = receiptId;
+                        saveLocal();
+                    }
+                    if (originalClick) originalClick();
+                };
+            }
+        }, 100);
+    };
+}
+
+// Run migration for existing bills
+function migrateExistingBillsReceipts() {
+    let migrated = 0;
+    bills.forEach(bill => {
+        if (!bill.receiptId && bill.alreadyPaid > 0) {
+            bill.receiptId = generateConsistentSlipNumber();
+            bill.slipNumber = bill.receiptId;
+            migrated++;
+        }
+    });
+    if (migrated > 0) {
+        saveLocal();
+        console.log(`Migrated ${migrated} bills with receipt numbers`);
+    }
+}
+
+// Run migration after load
+setTimeout(migrateExistingBillsReceipts, 1000);
+</script>
 </script>
 </body>
 </html>
